@@ -90,9 +90,9 @@ Jz_xidx_yidx[0 : len(t_period)] = np.sin(t_period * 2 * np.pi * frequency)
 
 # plot pulse
 
-# fig, ax = plt.subplots()
-# ax.plot(t, Jz_xidx_yidx)
-# plt.show()
+fig, ax = plt.subplots()
+ax.plot(t, Jz_xidx_yidx)
+plt.show()
 
 # plot grid
 
