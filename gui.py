@@ -53,7 +53,7 @@ def stability_condition_2d(phase_velocity, delta_x, delta_y):
 
 class TimeSeries:
     def __init__(self, data: np.ndarray):
-        self.data = data
+        self.data = data.copy()
 
         # padding with white for Hx and Hy grids
         if self.data.shape[2] < self.data.shape[1]:
@@ -124,19 +124,26 @@ class Solver:
         )
         self.wavelength = compute_wavelength(self.frequency, self.phase_velocity)
 
+        # gui option initialization
+        self.picoseconds = 100
         self.delta_x = self.wavelength / 5
         self.delta_y = self.wavelength / 5
-        self.period_count = 2.0
+        self.wavelengths_x = 4
+        self.wavelengths_y = 4
 
         self.setup_solver()
-        self.generate_time_series_array()
+        self.convert_to_save_data_to_time_series()
 
     def setup_solver(self):
         # print("Numerical dispersion", np.pi**2 / 8 * (delta_x / wavelength) ** 2)
+
+        # first delete any TimeSeries that exist
+        self.time_series_array = []
+
         self.x_min = 0
-        self.x_max = 4 * self.wavelength
+        self.x_max = self.wavelengths_x * self.wavelength
         self.y_min = 0
-        self.y_max = 4 * self.wavelength
+        self.y_max = self.wavelengths_y * self.wavelength
 
         x_Ez = np.arange(self.x_min, self.x_max, self.delta_x)
         y_Ez = np.arange(self.y_min, self.y_max, self.delta_y)
@@ -166,13 +173,13 @@ class Solver:
         self.alpha = np.ones_like(x_Ez) * (epsilon / self.delta_t) - sigma / 2
         self.beta = np.ones_like(x_Ez) * (epsilon / self.delta_t) + sigma / 2
 
-        t_period = np.arange(0.0, 1 / self.frequency, self.delta_t)
-        self.t = np.arange(0.0, self.period_count / self.frequency, self.delta_t)
-        self.Jz_xidx_yidx = np.zeros_like(self.t)
-        self.Jz_xidx_yidx[0 : len(t_period)] = np.sin(
-            t_period * 2 * np.pi * self.frequency
+        self.t = np.arange(0.0, self.picoseconds * 1e-12, self.delta_t)
+        t_sig = 1 / self.frequency
+        self.Jz_xidx_yidx = np.exp(-0.5 * (self.t / t_sig) ** 2) * np.sin(
+            2 * np.pi * self.frequency * self.t
         )
 
+        # relocate stuff
         self.Jz = np.zeros_like(x_Ez)
         self.Ez = np.zeros_like(x_Ez)
         self.Hx = np.zeros_like(x_Hx)
@@ -181,9 +188,7 @@ class Solver:
         self.Hx_to_save = np.zeros((len(self.t),) + self.Hx.shape, dtype=np.float32)
         self.Hy_to_save = np.zeros((len(self.t),) + self.Hy.shape, dtype=np.float32)
 
-        self.gigabytes_of_save_data = self.Ez_to_save.nbytes / 1.25e8 * 3
-
-    def memory_size(self):
+    def get_solution_memory_size(self):
         floats_2d_slice = len(np.arange(self.x_min, self.x_max, self.delta_x)) * len(
             np.arange(self.y_min, self.y_max, self.delta_y)
         )
@@ -194,7 +199,7 @@ class Solver:
         self.delta_t = stability_condition_2d(
             self.phase_velocity, self.delta_x, self.delta_y
         )
-        self.t = np.arange(0.0, self.period_count / self.frequency, self.delta_t)
+        self.t = np.arange(0.0, self.picoseconds * 1e-12, self.delta_t)
 
     def set_delta_x(self, new_delta_x):
         self.delta_x = new_delta_x
@@ -204,12 +209,30 @@ class Solver:
         self.delta_y = new_delta_y
         self.update_t()
 
-    def set_period_count(self, new_period_count):
-        self.period_count = new_period_count
+    def set_picoseconds(self, picoseconds):
+        self.picoseconds = picoseconds
         self.update_t()
 
-    def update(self, time_index):
+    def set_wavelengths_in_x(self, wavelengths_in_x):
+        self.wavelengths_x = wavelengths_in_x
+        self.update_xy_lim()
+
+    def set_wavelengths_in_y(self, wavelengths_in_y):
+        self.wavelengths_y = wavelengths_in_y
+        self.update_xy_lim()
+
+    def update_xy_lim(self):
+        self.x_min = 0
+        self.x_max = self.wavelengths_x * self.wavelength
+        self.y_min = 0
+        self.y_max = self.wavelengths_y * self.wavelength
+
+    # this is
+    def field_time_step(self, time_index):
+        # grab current
         self.Jz[self.yidx_Jz, self.xidx_Jz] = self.Jz_xidx_yidx[time_index]
+
+        # update electric field
         self.Ez[1:-1, 1:-1] = (
             1.0
             / self.beta[1:-1, 1:-1]
@@ -220,23 +243,29 @@ class Solver:
                 - self.Jz[1:-1, 1:-1]
             )
         )
+
+        # update magnetic field
         self.Hx = self.Hx - self.delta_t / (self.mu[:, 1:] * self.delta_y) * (
             self.Ez[:, 1:] - self.Ez[:, :-1]
         )
         self.Hy = self.Hy + self.delta_t / (self.mu[1:, :] * self.delta_x) * (
             self.Ez[1:, :] - self.Ez[:-1, :]
         )
+
+        # save new fields to time index
         self.Ez_to_save[time_index] = self.Ez
         self.Hx_to_save[time_index] = self.Hx
         self.Hy_to_save[time_index] = self.Hy
 
-    def generate_time_series_array(self):
-        self.time_series_array = [
-            TimeSeries(self.Ez_to_save),
-            TimeSeries(self.Hx_to_save),
-            TimeSeries(self.Hy_to_save),
-        ]
-        print("self.generate_time_series_array")
+    # THIS WILL DELETE self.[Ez,Hx,Hy]_to_save
+    def convert_to_save_data_to_time_series(self):
+        self.time_series_array = []
+        self.time_series_array.append(TimeSeries(self.Ez_to_save))
+        del self.Ez_to_save
+        self.time_series_array.append(TimeSeries(self.Hx_to_save))
+        del self.Hx_to_save
+        self.time_series_array.append(TimeSeries(self.Hy_to_save))
+        del self.Hy_to_save
 
 
 class App:
@@ -256,24 +285,36 @@ class App:
                 no_title_bar=True,
             ):  # type: ignore
                 dpg.add_input_float(
-                    label="Period Count",
-                    default_value=self.solver.period_count,
+                    label="Picoseconds",
+                    default_value=self.solver.picoseconds,
                     callback=self.update_period_count,
                 )
                 dpg.add_input_int(
-                    label="Δx",
+                    label="Wavelength Discretization in x",
                     tag="delta_x",
                     default_value=5,
                     callback=self.update_delta_x,
                 )
                 dpg.add_input_int(
-                    label="Δy",
+                    label="Wavelength Discretization in y",
                     tag="delta_y",
                     default_value=5,
                     callback=self.update_delta_y,
                 )
+                dpg.add_input_int(
+                    label="Wavelengths in x",
+                    tag="lambda_x",
+                    default_value=self.solver.wavelengths_x,
+                    callback=self.update_lambda_x,
+                )
+                dpg.add_input_int(
+                    label="Wavelengths in y",
+                    tag="lambda_y",
+                    default_value=self.solver.wavelengths_y,
+                    callback=self.update_lambda_y,
+                )
                 dpg.add_text(
-                    f"Memory Size: {self.solver.memory_size()} bytes",
+                    f"Memory Size: {self.solver.get_solution_memory_size()} bytes",
                     tag="memory_size",
                 )
                 dpg.add_button(
@@ -306,6 +347,7 @@ class App:
                 )
 
         self.create_texture_first_time()
+        self.update_memory_size(None, None)
 
         dpg.create_viewport(title="Dynamic Texture Update", width=1920, height=1080)
         dpg.set_primary_window("primary_window", True)
@@ -336,6 +378,14 @@ class App:
         )
 
     def recreate_texture(self):
+        # reset time_series_slider
+        dpg.configure_item(
+            "time_series_slider",
+            max_value=len(self.solver.t) - 1,
+        )
+        dpg.set_value("time_series_slider", 0)
+
+        # then delete stuff
         if dpg.does_item_exist("slice_texture"):
             dpg.delete_item("slice_texture")
         if dpg.does_alias_exist("slice_texture"):
@@ -375,19 +425,32 @@ class App:
 
     def update_delta_x(self, sender, delta_x):
         self.solver.set_delta_x(self.solver.wavelength / delta_x)
-        self.update_memory_size(None, self.solver.memory_size())
+        self.update_memory_size(None, self.solver.get_solution_memory_size())
 
     def update_delta_y(self, sender, delta_y):
         self.solver.set_delta_y(self.solver.wavelength / delta_y)
-        self.update_memory_size(None, self.solver.memory_size())
+        self.update_memory_size(None, self.solver.get_solution_memory_size())
 
     def update_period_count(self, sender, period_count):
-        self.solver.set_period_count(period_count)
-        self.update_memory_size(None, self.solver.memory_size())
+        self.solver.set_picoseconds(period_count)
+        self.update_memory_size(None, self.solver.get_solution_memory_size())
+
+    def update_lambda_x(self, sender, lambda_x):
+        self.solver.set_wavelengths_in_x(lambda_x)
+        self.update_memory_size(None, self.solver.get_solution_memory_size())
+
+    def update_lambda_y(self, sender, lambda_y):
+        self.solver.set_wavelengths_in_y(lambda_y)
+        self.update_memory_size(None, self.solver.get_solution_memory_size())
 
     def update_memory_size(self, sender, memory_size):
-        memory_bytes = format_bytes(self.solver.memory_size())
-        dpg.set_value("memory_size", f"Memory Size: {memory_bytes} bytes")
+        memory_bytes_int = self.solver.get_solution_memory_size()
+        memory_bytes = format_bytes(memory_bytes_int)
+        max_memory_bytes = format_bytes(memory_bytes_int + memory_bytes_int // 3)
+        dpg.set_value(
+            "memory_size",
+            f"Memory Size: {memory_bytes} bytes (peak {max_memory_bytes})",
+        )
 
     def run_solver(self):
         dpg.configure_item("solve_button", enabled=False)
@@ -403,21 +466,16 @@ class App:
     def _run_solver(self):
         print("_run_solver")
         for i in range(len(self.solver.t)):
-            self.solver.update(i)
+            self.solver.field_time_step(i)
             progress_value = (i + 1) / len(self.solver.t)
             dpg.set_value("solve_progress_bar", progress_value)
             dpg.configure_item(
                 "solve_progress_bar", overlay=f"{int(progress_value * 100)}%"
             )
-        self.solver.generate_time_series_array()
+        self.solver.convert_to_save_data_to_time_series()
 
         # recreate texture at possibly new size
         self.recreate_texture()
-        dpg.configure_item(
-            "time_series_slider",
-            max_value=len(self.solver.t) - 1,
-        )
-        dpg.set_value("time_series_slider", 0)
         self.update_image(None, dpg.get_value("time_series_slider"))
         dpg.configure_item("solve_button", enabled=True)
 
