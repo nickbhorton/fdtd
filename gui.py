@@ -2,6 +2,7 @@ import threading
 
 import dearpygui.dearpygui as dpg
 import numpy as np
+from matplotlib import pyplot as plt
 from scipy.constants import epsilon_0, mu_0
 
 
@@ -72,8 +73,7 @@ class TimeSeries:
             )
 
         self.depth, self.width, self.height = self.data.shape
-        max_field = max(np.abs(self.data.max()), np.abs(self.data.min()))
-        mean_max = np.median(
+        self.max_field = np.max(
             np.max(
                 (
                     np.abs(np.max(self.data, axis=(1, 2))),
@@ -82,29 +82,31 @@ class TimeSeries:
                 axis=0,
             )
         )
-        max_field = mean_max
-        if max_field != 0.0:
-            self.data = self.data + max_field
-            self.data = self.data / (2.0 * max_field)
 
-    def get_rgba_in_bwr(self, time_index):
+    def get_rgba_in_bwr(self, time_index, scale=1.0):
         if time_index == None:
             time_index = 0
+
+        if self.max_field != 0.0:
+            dat = self.data[time_index] + self.max_field * scale
+            dat = dat / (2.0 * self.max_field * scale)
+        else:
+            dat = self.data[time_index]
         # matplotlib bwr logic assuming 0.0 < self.data[time_index] < 1.0
         rgba = np.empty((self.width, self.height, 4), dtype=np.float32)
-        rgba[..., 0] = np.piecewise(
-            self.data[time_index],
-            [self.data[time_index] < 0.5, self.data[time_index] >= 0.5],
+        rgba[..., 0] = scale * np.piecewise(
+            dat,
+            [dat < 0.5, dat >= 0.5],
             [lambda val: 2.0 * val, 1.0],
         )
-        rgba[..., 1] = np.piecewise(
-            self.data[time_index],
-            [self.data[time_index] < 0.5, self.data[time_index] >= 0.5],
+        rgba[..., 1] = scale * np.piecewise(
+            dat,
+            [dat < 0.5, dat >= 0.5],
             [lambda val: 2.0 * val, lambda val: 2.0 * (1.0 - val)],
         )
-        rgba[..., 2] = np.piecewise(
-            self.data[time_index],
-            [self.data[time_index] < 0.5, self.data[time_index] >= 0.5],
+        rgba[..., 2] = scale * np.piecewise(
+            dat,
+            [dat < 0.5, dat >= 0.5],
             [1.0, lambda val: 2.0 * (1.0 - val)],
         )
         rgba[..., 3] = 1.0  # A
@@ -125,9 +127,9 @@ class Solver:
         self.wavelength = compute_wavelength(self.frequency, self.phase_velocity)
 
         # gui option initialization
-        self.picoseconds = 100
-        self.delta_x = self.wavelength / 5
-        self.delta_y = self.wavelength / 5
+        self.picoseconds = 1000
+        self.delta_x = self.wavelength / 50
+        self.delta_y = self.wavelength / 50
         self.wavelengths_x = 4
         self.wavelengths_y = 4
 
@@ -161,17 +163,49 @@ class Solver:
         self.xidx_Jz = int(x_Ez.shape[0] / 2)
         self.yidx_Jz = int(x_Ez.shape[0] / 2)
 
-        # setup materials
-        sigma = np.zeros_like(x_Ez) * self.sigma_background
-        epsilon = np.ones_like(x_Ez) * self.epsilon_background
-        self.mu = np.ones_like(x_Ez) * self.mu_background
-
         self.delta_t = stability_condition_2d(
             self.phase_velocity, self.delta_x, self.delta_y
         )
 
-        self.alpha = np.ones_like(x_Ez) * (epsilon / self.delta_t) - sigma / 2
-        self.beta = np.ones_like(x_Ez) * (epsilon / self.delta_t) + sigma / 2
+        # setup materials
+        self.epsilon = np.ones_like(x_Ez) * self.epsilon_background
+        self.mu = np.ones_like(x_Ez) * self.mu_background
+        self.sigma_x = np.zeros_like(self.epsilon)
+        self.sigma_y = np.zeros_like(self.epsilon)
+
+        # PML stuff
+        x_left = (self.x_max - self.x_min) * 0.2
+        x_right = (self.x_max - self.x_min) * 0.8
+        y_top = (self.y_max - self.y_min) * 0.8
+        y_bot = (self.y_max - self.y_min) * 0.2
+
+        sigma_val = 1e3
+
+        self.sigma_x[x_Ez < x_left] = sigma_val
+        self.sigma_x[x_Ez > x_right] = sigma_val
+        self.sigma_y[y_Ez < y_bot] = sigma_val
+        self.sigma_y[y_Ez > y_top] = sigma_val
+
+        # derived materials
+        self.alpha_x = np.ones_like(x_Ez) * (
+            (self.epsilon / self.delta_t) - self.sigma_x / 2
+        )
+        self.alpha_y = np.ones_like(x_Ez) * (
+            (self.epsilon / self.delta_t) - self.sigma_y / 2
+        )
+        self.beta_x = np.ones_like(x_Ez) * (
+            (self.epsilon / self.delta_t) + self.sigma_x / 2
+        )
+        self.beta_y = np.ones_like(x_Ez) * (
+            (self.epsilon / self.delta_t) + self.sigma_y / 2
+        )
+
+        # fig, ax = plt.subplots(1, 2)
+        # mesh1 = ax[0].pcolormesh(x_Ez, y_Ez, self.alpha_x)
+        # mesh2 = ax[1].pcolormesh(x_Ez, y_Ez, self.alpha_y)
+        # fig.colorbar(mesh1)
+        # fig.colorbar(mesh2)
+        # plt.show()
 
         self.t = np.arange(0.0, self.picoseconds * 1e-12, self.delta_t)
         t_sig = 1 / self.frequency
@@ -179,12 +213,16 @@ class Solver:
             2 * np.pi * self.frequency * self.t
         )
 
-        # relocate stuff
+        # relocate temp fields
         self.Jz = np.zeros_like(x_Ez)
         self.Ez = np.zeros_like(x_Ez)
+        self.Ez_x = np.zeros_like(x_Ez)
+        self.Ez_y = np.zeros_like(x_Ez)
         self.Hx = np.zeros_like(x_Hx)
         self.Hy = np.zeros_like(x_Hy)
-        self.Ez_to_save = np.zeros((len(self.t),) + self.Ez.shape, dtype=np.float32)
+
+        # reallocated to_save
+        self.Ez_to_save = np.zeros((len(self.t),) + self.Ez_x.shape, dtype=np.float32)
         self.Hx_to_save = np.zeros((len(self.t),) + self.Hx.shape, dtype=np.float32)
         self.Hy_to_save = np.zeros((len(self.t),) + self.Hy.shape, dtype=np.float32)
 
@@ -229,28 +267,56 @@ class Solver:
 
     # this is
     def field_time_step(self, time_index):
-        # grab current
+        # grab next current timestep
         self.Jz[self.yidx_Jz, self.xidx_Jz] = self.Jz_xidx_yidx[time_index]
 
-        # update electric field
-        self.Ez[1:-1, 1:-1] = (
+        # update magnetic field
+        self.Hx = (
             1.0
-            / self.beta[1:-1, 1:-1]
+            / self.beta_y[:, 1:]
             * (
-                self.alpha[1:-1, 1:-1] * self.Ez[1:-1, 1:-1]
+                self.alpha_y[:, 1:] * self.Hx
+                - (self.epsilon[:, 1:] / (self.mu[:, 1:] * self.delta_y))
+                * (self.Ez[:, 1:] - self.Ez[:, :-1])
+            )
+        )
+        self.Hy = (
+            1.0
+            / self.beta_x[1:, :]
+            * (
+                self.alpha_x[1:, :] * self.Hy
+                + (self.epsilon[1:, :] / (self.mu[1:, :] * self.delta_x))
+                * (self.Ez[1:, :] - self.Ez[:-1, :])
+            )
+        )
+
+        # update electric field
+        self.Ez_x[1:-1, 1:-1] = (
+            1.0
+            / self.beta_x[1:-1, 1:-1]
+            * (
+                self.alpha_x[1:-1, 1:-1] * self.Ez_x[1:-1, 1:-1]
                 + 1 / self.delta_x * (self.Hy[1:, 1:-1] - self.Hy[:-1, 1:-1])
+                - self.Jz[1:-1, 1:-1]
+            )
+        )
+        self.Ez_y[1:-1, 1:-1] = (
+            1.0
+            / self.beta_y[1:-1, 1:-1]
+            * (
+                self.alpha_y[1:-1, 1:-1] * self.Ez_y[1:-1, 1:-1]
                 - 1 / self.delta_y * (self.Hx[1:-1, 1:] - self.Hx[1:-1, :-1])
                 - self.Jz[1:-1, 1:-1]
             )
         )
+        self.Ez = self.Ez_x + self.Ez_y
 
-        # update magnetic field
-        self.Hx = self.Hx - self.delta_t / (self.mu[:, 1:] * self.delta_y) * (
-            self.Ez[:, 1:] - self.Ez[:, :-1]
-        )
-        self.Hy = self.Hy + self.delta_t / (self.mu[1:, :] * self.delta_x) * (
-            self.Ez[1:, :] - self.Ez[:-1, :]
-        )
+        # self.Hx = self.Hx - self.delta_t / (self.mu[:, 1:] * self.delta_y) * (
+        #     self.Ez[:, 1:] - self.Ez[:, :-1]
+        # )
+        # self.Hy = self.Hy + self.delta_t / (self.mu[1:, :] * self.delta_x) * (
+        #     self.Ez[1:, :] - self.Ez[:-1, :]
+        # )
 
         # save new fields to time index
         self.Ez_to_save[time_index] = self.Ez
@@ -292,13 +358,13 @@ class App:
                 dpg.add_input_int(
                     label="Wavelength Discretization in x",
                     tag="delta_x",
-                    default_value=5,
+                    default_value=50,
                     callback=self.update_delta_x,
                 )
                 dpg.add_input_int(
                     label="Wavelength Discretization in y",
                     tag="delta_y",
-                    default_value=5,
+                    default_value=50,
                     callback=self.update_delta_y,
                 )
                 dpg.add_input_int(
@@ -339,6 +405,14 @@ class App:
                     ].depth
                     - 1,
                     default_value=0,
+                    callback=self.update_image,
+                    width=930,
+                )
+                dpg.add_slider_float(
+                    tag="colorbar_scale_slider",
+                    min_value=0.0,
+                    max_value=2.0,
+                    default_value=1.0,
                     callback=self.update_image,
                     width=930,
                 )
@@ -406,10 +480,12 @@ class App:
         )
 
     def update_image(self, sender, time_index):
+        time_index = dpg.get_value("time_series_slider")
+        scale = dpg.get_value("colorbar_scale_slider")
         dpg.set_value(
             "slice_texture",
             self.solver.time_series_array[self.time_series_index].get_rgba_in_bwr(
-                time_index
+                time_index, scale
             ),
         )
 
