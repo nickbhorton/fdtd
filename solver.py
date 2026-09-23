@@ -1,3 +1,7 @@
+import json
+from pathlib import Path
+
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.constants import epsilon_0, mu_0
 
@@ -10,12 +14,14 @@ from timeseries import TimeSeries
 
 
 class Solver:
-    def __init__(self):
-        self.frequency = 10e9
+    def __init__(self, defaults_path: Path):
+        self.defaults = json.loads(defaults_path.read_text())
 
-        self.epsilon_background = 1.0 * epsilon_0
-        self.mu_background = 1.0 * mu_0
-        self.sigma_background = 0.0
+        self.frequency = self.defaults["frequency"]
+
+        self.epsilon_background = self.defaults["background_epsilon_r"] * epsilon_0
+        self.mu_background = self.defaults["background_mu_r"] * mu_0
+        self.sigma_background = self.defaults["background_sigma"]
 
         self.phase_velocity = materials_to_phase_velocity(
             self.epsilon_background, self.mu_background
@@ -23,18 +29,16 @@ class Solver:
         self.wavelength = compute_wavelength(self.frequency, self.phase_velocity)
 
         # gui option initialization
-        self.picoseconds = 1000
-        self.delta_x = self.wavelength / 50
-        self.delta_y = self.wavelength / 50
-        self.wavelengths_x = 4
-        self.wavelengths_y = 4
+        self.picoseconds = self.defaults["picoseconds"]
+        self.delta_x = self.wavelength / self.defaults["wavelength_discretization_x"]
+        self.delta_y = self.wavelength / self.defaults["wavelength_discretization_y"]
+        self.wavelengths_x = self.defaults["wavelengths_in_x"]
+        self.wavelengths_y = self.defaults["wavelengths_in_y"]
 
         self.setup_solver()
         self.convert_to_save_data_to_time_series()
 
     def setup_solver(self):
-        # print("Numerical dispersion", np.pi**2 / 8 * (delta_x / wavelength) ** 2)
-
         # first delete any TimeSeries that exist
         self.time_series_array = []
 
@@ -69,56 +73,76 @@ class Solver:
         x_line = self.x_Ez[0, :]
         y_line = self.y_Ez[:, 0]
 
-        percent_inset = 0.1
+        percent_inset = self.defaults["PML_inset_as_uniform"]
         x_left = (self.x_max - self.x_min) * percent_inset
         x_right = (self.x_max - self.x_min) * (1 - percent_inset)
         y_bot = (self.y_max - self.y_min) * percent_inset
         y_top = (self.y_max - self.y_min) * (1 - percent_inset)
 
         # calculate sigma curves for each side
-        sigma_max = 2.5
-        falloff_exponent = 2.0
+        sigma_max = self.defaults["sigma_max"]
+        falloff_exponent = self.defaults["sigma_falloff_exponent"]
         # x left
-        x_line_left = x_line[x_line < x_left]
-        x_line_left = (x_line_left - np.min(x_line_left)) / (
-            np.max(x_line_left) - np.min(x_line_left)
-        )
-        x_line_left = x_line_left[::-1]
-        x_line_left = x_line_left**falloff_exponent
-        x_line_left *= sigma_max
-        for i in range(len(x_line)):
-            self.sigma_x[i, :][x_line < x_left] = x_line_left
+        if self.defaults["left_boundary"] == "PML":
+            x_line_left = x_line[x_line < x_left]
+            x_line_left = (x_line_left - np.min(x_line_left)) / (
+                np.max(x_line_left) - np.min(x_line_left)
+            )
+            x_line_left = x_line_left[::-1]
+            x_line_left = x_line_left**falloff_exponent
+            x_line_left *= sigma_max
+            for i in range(len(x_line)):
+                self.sigma_x[i, :][x_line < x_left] = x_line_left
+        elif self.defaults["left_boundary"] == "PEC":
+            pass
+        else:
+            print("defaults.left_boundary can be either PML or PEC. Assuming PEC")
 
         # x right
-        x_line_right = x_line[x_line > x_right]
-        x_line_right = (x_line_right - np.min(x_line_right)) / (
-            np.max(x_line_right) - np.min(x_line_right)
-        )
-        x_line_right = x_line_right**falloff_exponent
-        x_line_right *= sigma_max
-        for i in range(len(x_line)):
-            self.sigma_x[i, :][x_line > x_right] = x_line_right
+        if self.defaults["right_boundary"] == "PML":
+            x_line_right = x_line[x_line > x_right]
+            x_line_right = (x_line_right - np.min(x_line_right)) / (
+                np.max(x_line_right) - np.min(x_line_right)
+            )
+            x_line_right = x_line_right**falloff_exponent
+            x_line_right *= sigma_max
+            for i in range(len(x_line)):
+                self.sigma_x[i, :][x_line > x_right] = x_line_right
+        elif self.defaults["right_boundary"] == "PEC":
+            pass
+        else:
+            print("defaults.right_boundary can be either PML or PEC. Assuming PEC")
 
         # y top
-        y_line_top = y_line[y_line > y_top]
-        y_line_top = (y_line_top - np.min(y_line_top)) / (
-            np.max(y_line_top) - np.min(y_line_top)
-        )
-        y_line_top = y_line_top**falloff_exponent
-        y_line_top *= sigma_max
-        for i in range(len(y_line)):
-            self.sigma_y[:, i][y_line > y_top] = y_line_top
+        if self.defaults["top_boundary"] == "PML":
+            y_line_top = y_line[y_line > y_top]
+            y_line_top = (y_line_top - np.min(y_line_top)) / (
+                np.max(y_line_top) - np.min(y_line_top)
+            )
+            y_line_top = y_line_top**falloff_exponent
+            y_line_top *= sigma_max
+            for i in range(len(y_line)):
+                self.sigma_y[:, i][y_line > y_top] = y_line_top
+        elif self.defaults["top_boundary"] == "PEC":
+            pass
+        else:
+            print("defaults.top_boundary can be either PML or PEC. Assuming PEC")
 
         # y bot
-        y_line_bot = y_line[y_line < y_bot]
-        y_line_bot = (y_line_bot - np.min(y_line_bot)) / (
-            np.max(y_line_bot) - np.min(y_line_bot)
-        )
-        y_line_bot = y_line_bot[::-1]
-        y_line_bot = y_line_bot**falloff_exponent
-        y_line_bot *= sigma_max
-        for i in range(len(y_line)):
-            self.sigma_y[:, i][y_line < y_bot] = y_line_bot
+        if self.defaults["bot_boundary"] == "PML":
+            y_line_bot = y_line[y_line < y_bot]
+            y_line_bot = (y_line_bot - np.min(y_line_bot)) / (
+                np.max(y_line_bot) - np.min(y_line_bot)
+            )
+            y_line_bot = y_line_bot[::-1]
+            y_line_bot = y_line_bot**falloff_exponent
+            y_line_bot *= sigma_max
+            for i in range(len(y_line)):
+                self.sigma_y[:, i][y_line < y_bot] = y_line_bot
+        elif self.defaults["bot_boundary"] == "PEC":
+            pass
+        else:
+            print("defaults.bot_boundary can be either PML or PEC. Assuming PEC")
 
         # plot sigmas
         # fig, ax = plt.subplots(1, 2, figsize=(10, 5), layout="constrained")
@@ -127,6 +151,7 @@ class Solver:
         # mesh2 = ax[1].pcolormesh(self.x_Ez, self.y_Ez, self.sigma_y, cmap="jet")
         # fig.colorbar(mesh2)
         # plt.show()
+        # exit(0)
 
         # derived materials
         self.alpha_x = self.epsilon / self.delta_t - self.sigma_x / 2
@@ -138,8 +163,8 @@ class Solver:
         self.xidx_Jz = int(self.x_Ez.shape[0] / 2)
         self.yidx_Jz = int(self.x_Ez.shape[0] / 2)
         self.t = np.arange(0.0, self.picoseconds * 1e-12, self.delta_t)
-        t_sig = 1 / self.frequency
-        self.Jz_xidx_yidx = np.exp(-0.5 * (self.t / t_sig) ** 2) * np.sin(
+        self.period = 1 / self.frequency
+        self.Jz_xidx_yidx = np.exp(-0.5 * (self.t / self.period) ** 2) * np.sin(
             2 * np.pi * self.frequency * self.t
         )
 
@@ -246,9 +271,36 @@ class Solver:
     # THIS WILL DELETE self.[Ez,Hx,Hy]_to_save
     def convert_to_save_data_to_time_series(self):
         self.time_series_array = []
-        self.time_series_array.append(TimeSeries(self.Ez_to_save))
+        self.time_series_array.append(
+            TimeSeries(
+                self.Ez_to_save,
+                int(
+                    self.period
+                    * self.defaults["colorbar_max_mean_in_periods"]
+                    / self.delta_t
+                ),
+            )
+        )
         del self.Ez_to_save
-        self.time_series_array.append(TimeSeries(self.Hx_to_save))
+        self.time_series_array.append(
+            TimeSeries(
+                self.Hx_to_save,
+                int(
+                    self.period
+                    * self.defaults["colorbar_max_mean_in_periods"]
+                    / self.delta_t
+                ),
+            )
+        )
         del self.Hx_to_save
-        self.time_series_array.append(TimeSeries(self.Hy_to_save))
+        self.time_series_array.append(
+            TimeSeries(
+                self.Hy_to_save,
+                int(
+                    self.period
+                    * self.defaults["colorbar_max_mean_in_periods"]
+                    / self.delta_t
+                ),
+            )
+        )
         del self.Hy_to_save

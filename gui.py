@@ -1,4 +1,5 @@
 import threading
+from pathlib import Path
 
 import dearpygui.dearpygui as dpg
 
@@ -7,8 +8,8 @@ from solver import Solver
 
 
 class App:
-    def __init__(self):
-        self.solver = Solver()
+    def __init__(self, solver_defaults_path: Path):
+        self.solver = Solver(solver_defaults_path)
         self.time_series_index = 0
 
         dpg.create_context()
@@ -30,13 +31,13 @@ class App:
                 dpg.add_input_int(
                     label="Wavelength Discretization in x",
                     tag="delta_x",
-                    default_value=50,
+                    default_value=self.solver.defaults["wavelength_discretization_x"],
                     callback=self.update_delta_x,
                 )
                 dpg.add_input_int(
                     label="Wavelength Discretization in y",
                     tag="delta_y",
-                    default_value=50,
+                    default_value=self.solver.defaults["wavelength_discretization_y"],
                     callback=self.update_delta_y,
                 )
                 dpg.add_input_int(
@@ -227,5 +228,5 @@ class App:
         dpg.configure_item("solve_button", enabled=True)
 
 
-a = App()
+a = App(Path("solver_default.json"))
 dpg.destroy_context()

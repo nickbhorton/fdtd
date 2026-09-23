@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 
 
 class TimeSeries:
-    def __init__(self, data: np.ndarray):
+    def __init__(self, data: np.ndarray, average_over_count: int):
         self.data = data.copy()
 
         # padding with white for Hx and Hy grids
@@ -31,7 +31,7 @@ class TimeSeries:
                     np.abs(np.min(self.data, axis=(1, 2))),
                 ),
                 axis=0,
-            )
+            )[:average_over_count]
         )
 
     def get_rgba_in_bwr(self, time_index, scale=1.0):

@@ -1,0 +1,19 @@
+{
+    "frequency": 10e9,
+    "background_epsilon_r": 1.0,
+    "background_mu_r": 1.0,
+    "background_sigma": 0.0,
+    "picoseconds": 1000.0,
+    "wavelengths_in_x": 4.0,
+    "wavelengths_in_y": 4.0,
+    "wavelength_discretization_x": 30,
+    "wavelength_discretization_y": 30,
+    "PML_inset_as_uniform": 0.2,
+    "left_boundary": "PEC",
+    "right_boundary": "PML",
+    "top_boundary": "PEC",
+    "bot_boundary": "PML",
+    "sigma_max": 1.0,
+    "sigma_falloff_exponent": 2.0,
+    "colorbar_max_mean_in_periods": 3.0
+}
