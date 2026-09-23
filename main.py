@@ -91,18 +91,18 @@ Jz_xidx_yidx[0 : len(t_period)] = np.sin(t_period * 2 * np.pi * frequency)
 
 # plot pulse
 
-# fig, ax = plt.subplots()
-# ax.plot(t, Jz_xidx_yidx)
-# plt.show()
+fig, ax = plt.subplots()
+ax.plot(t, Jz_xidx_yidx)
 
 # plot grid
 
-# fig, ax = plt.subplots()
-# ax.scatter(x_Ez.flatten(), y_Ez.flatten(), color="black", label="Ez grid")
-# ax.scatter(x_Hx.flatten(), y_Hx.flatten(), color="red", label="Hx grid")
-# ax.scatter(x_Hy.flatten(), y_Hy.flatten(), color="blue", label="Hy grid")
-# ax.legend()
-# plt.show()
+fig, ax = plt.subplots()
+ax.scatter(x_Ez.flatten(), y_Ez.flatten(), color="black", label="Ez grid")
+ax.scatter(x_Hx.flatten(), y_Hx.flatten(), color="red", label="Hx grid")
+ax.scatter(x_Hy.flatten(), y_Hy.flatten(), color="blue", label="Hy grid")
+ax.legend()
+plt.show()
+exit(0)
 
 
 class Solver:
