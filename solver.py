@@ -66,6 +66,22 @@ class Solver:
 
         # setup materials
         self.epsilon = np.ones_like(self.x_Ez) * self.epsilon_background
+
+        for x0, y0, radius, eps_r in self.defaults["permittivity_circles"]:
+            xc = self.x_min + (self.x_max - self.x_min) * x0
+            yc = self.y_min + (self.y_max - self.y_min) * y0
+            rr = (self.x_max - self.x_min) * radius
+            self.epsilon[(self.x_Ez - xc) ** 2 + (self.y_Ez - yc) ** 2 < rr**2] = (
+                eps_r * epsilon_0
+            )
+
+        # plot epsilon
+        # fig, ax = plt.subplots()
+        # mesh = ax.pcolormesh(self.x_Ez, self.y_Ez, self.epsilon)
+        # fig.colorbar(mesh)
+        # plt.show()
+        # exit(0)
+
         self.mu = np.ones_like(self.x_Ez) * self.mu_background
         self.sigma_x = np.zeros_like(self.x_Ez)
         self.sigma_y = np.zeros_like(self.x_Ez)

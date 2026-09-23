@@ -9,11 +9,19 @@
     "wavelength_discretization_x": 30,
     "wavelength_discretization_y": 30,
     "PML_inset_as_uniform": 0.2,
-    "left_boundary": "PEC",
+    "left_boundary": "PML",
     "right_boundary": "PML",
-    "top_boundary": "PEC",
+    "top_boundary": "PML",
     "bot_boundary": "PML",
     "sigma_max": 1.0,
     "sigma_falloff_exponent": 2.0,
-    "colorbar_max_mean_in_periods": 3.0
+    "colorbar_max_mean_in_periods": 3.0,
+    "permittivity_circles": [
+        [
+            0.0,
+            0.0,
+            0.0,
+            2.0
+        ]
+    ]
 }
