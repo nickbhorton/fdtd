@@ -1,4 +1,5 @@
 import threading
+from re import S
 
 import dearpygui.dearpygui as dpg
 import matplotlib.cm as cm
@@ -170,11 +171,58 @@ class Solver:
         y_bot = (self.y_max - self.y_min) * percent_inset
         y_top = (self.y_max - self.y_min) * (1 - percent_inset)
 
-        sigma_val = 1.0
-        self.sigma_x[self.x_Ez < x_left] = sigma_val
-        self.sigma_x[self.x_Ez > x_right] = sigma_val
-        self.sigma_y[self.y_Ez > y_top] = sigma_val
-        self.sigma_y[self.y_Ez < y_bot] = sigma_val
+        # calculate sigma curves for each side
+        sigma_max = 1.0
+        falloff_exponent = 2.0
+        # x left
+        x_line_left = x_line[x_line < x_left]
+        x_line_left = (x_line_left - np.min(x_line_left)) / (
+            np.max(x_line_left) - np.min(x_line_left)
+        )
+        x_line_left = x_line_left[::-1]
+        x_line_left = x_line_left**falloff_exponent
+        x_line_left *= sigma_max
+        for i in range(len(x_line)):
+            self.sigma_x[i, :][x_line < x_left] = x_line_left
+
+        # x right
+        x_line_right = x_line[x_line > x_right]
+        x_line_right = (x_line_right - np.min(x_line_right)) / (
+            np.max(x_line_right) - np.min(x_line_right)
+        )
+        x_line_right = x_line_right**falloff_exponent
+        x_line_right *= sigma_max
+        for i in range(len(x_line)):
+            self.sigma_x[i, :][x_line > x_right] = x_line_right
+
+        # y top
+        y_line_top = y_line[y_line > y_top]
+        y_line_top = (y_line_top - np.min(y_line_top)) / (
+            np.max(y_line_top) - np.min(y_line_top)
+        )
+        y_line_top = y_line_top**falloff_exponent
+        y_line_top *= sigma_max
+        for i in range(len(y_line)):
+            self.sigma_y[:, i][y_line > y_top] = y_line_top
+
+        # y bot
+        y_line_bot = y_line[y_line < y_bot]
+        y_line_bot = (y_line_bot - np.min(y_line_bot)) / (
+            np.max(y_line_bot) - np.min(y_line_bot)
+        )
+        y_line_bot = y_line_bot[::-1]
+        y_line_bot = y_line_bot**falloff_exponent
+        y_line_bot *= sigma_max
+        for i in range(len(y_line)):
+            self.sigma_y[:, i][y_line < y_bot] = y_line_bot
+
+        # plot sigmas
+        # fig, ax = plt.subplots(1, 2, figsize=(10, 5), layout="constrained")
+        # mesh1 = ax[0].pcolormesh(self.x_Ez, self.y_Ez, self.sigma_x, cmap="jet")
+        # fig.colorbar(mesh1)
+        # mesh2 = ax[1].pcolormesh(self.x_Ez, self.y_Ez, self.sigma_y, cmap="jet")
+        # fig.colorbar(mesh2)
+        # plt.show()
 
         # derived materials
         self.alpha_x = self.epsilon / self.delta_t - self.sigma_x / 2
@@ -262,15 +310,6 @@ class Solver:
             )
             * (self.Ez[y1 + 1 : y2, x1:x2] - self.Ez[y1 : y2 - 1, x1:x2])
         )
-        # self.Hx[y1:y2, x1 : x2 - 1] = (1.0 / self.beta_y[y1:y2, x1 : x2 - 1]) * (
-        #     self.alpha_y[y1:y2, x1 : x2 - 1] * self.Hx[y1:y2, x1 : x2 - 1]
-        #     - (
-        #         self.epsilon[y1:y2, x1 : x2 - 1]
-        #         / (self.mu[y1:y2, x1 : x2 - 1] * self.delta_y)
-        #     )
-        #     * (self.Ez[y1:y2, x1 + 1 : x2] - self.Ez[y1:y2, x1 : x2 - 1])
-        # )
-
         self.Hy[y1:y2, x1 : x2 - 1] = (1.0 / self.beta_x[y1:y2, x1 : x2 - 1]) * (
             self.alpha_x[y1:y2, x1 : x2 - 1] * self.Hy[y1:y2, x1 : x2 - 1]
             + (
@@ -279,14 +318,6 @@ class Solver:
             )
             * (self.Ez[y1:y2, x1 + 1 : x2] - self.Ez[y1:y2, x1 : x2 - 1])
         )
-        # self.Hy[y1 : y2 - 1, x1:x2] = (1.0 / self.beta_x[y1 : y2 - 1, x1:x2]) * (
-        #     self.alpha_x[y1 : y2 - 1, x1:x2] * self.Hy[y1 : y2 - 1, x1:x2]
-        #     + (
-        #         self.epsilon[y1 : y2 - 1, x1:x2]
-        #         / (self.mu[y1 : y2 - 1, x1:x2] * self.delta_x)
-        #     )
-        #     * (self.Ez[y1 + 1 : y2, x1:x2] - self.Ez[y1 : y2 - 1, x1:x2])
-        # )
 
         self.Ez_sx[y1:y2, x1:x2] = (1.0 / self.beta_x[y1:y2, x1:x2]) * (
             self.alpha_x[y1:y2, x1:x2] * self.Ez_sx[y1:y2, x1:x2]
@@ -294,28 +325,13 @@ class Solver:
             * (self.Hy[y1:y2, x1:x2] - self.Hy[y1:y2, x1 - 1 : x2 - 1])
             - self.Jz[y1:y2, x1:x2] / 2.0
         )
-        # self.Ez_sx[y1:y2, x1:x2] = (1.0 / self.beta_x[y1:y2, x1:x2]) * (
-        #     self.alpha_x[y1:y2, x1:x2] * self.Ez_sx[y1:y2, x1:x2]
-        #     + (1.0 / self.delta_x)
-        #     * (self.Hy[y1:y2, x1:x2] - self.Hy[y1 - 1 : y2 - 1, x1:x2])
-        #     - self.Jz[y1:y2, x1:x2] / 2.0
-        # )
-
-        # Ez_sy depends on dHx/dy (difference along y-axis)
         self.Ez_sy[y1:y2, x1:x2] = (1.0 / self.beta_y[y1:y2, x1:x2]) * (
             self.alpha_y[y1:y2, x1:x2] * self.Ez_sy[y1:y2, x1:x2]
             - (1.0 / self.delta_y)
             * (self.Hx[y1:y2, x1:x2] - self.Hx[y1 - 1 : y2 - 1, x1:x2])
             - self.Jz[y1:y2, x1:x2] / 2.0
         )
-        # self.Ez_sy[y1:y2, x1:x2] = (1.0 / self.beta_y[y1:y2, x1:x2]) * (
-        #     self.alpha_y[y1:y2, x1:x2] * self.Ez_sy[y1:y2, x1:x2]
-        #     - (1.0 / self.delta_y)
-        #     * (self.Hx[y1:y2, x1:x2] - self.Hx[y1:y2, x1 - 1 : x2 - 1])
-        #     - self.Jz[y1:y2, x1:x2] / 2.0
-        # )
 
-        # Combine split components
         self.Ez = self.Ez_sx + self.Ez_sy
 
         # save new fields to time index
@@ -411,7 +427,7 @@ class App:
                 dpg.add_slider_float(
                     tag="colorbar_scale_slider",
                     min_value=0.0,
-                    max_value=2.0,
+                    max_value=4.0,
                     default_value=1.0,
                     callback=self.update_image,
                     width=930,
