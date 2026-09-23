@@ -245,23 +245,6 @@ class Solver:
         y1 = 1
         y2 = self.Ez.shape[0] - 1
 
-        x_left = self.x_min + (self.x_max - self.x_min) * 0.3
-        x_right = self.x_min + (self.x_max - self.x_min) * (1.0 - 0.3)
-        y_bot = self.y_min + (self.y_max - self.y_min) * 0.3
-        y_top = self.y_min + (self.y_max - self.y_min) * (1.0 - 0.3)
-
-        E0 = 0.0
-
-        # left
-        x_idx_Ez_left = np.abs(self.x_Ez[0, :] - x_left).argmin()
-        y_mask_Ez_left = (self.y_Ez[:, x_idx_Ez_left] >= y_bot) & (
-            self.y_Ez[:, x_idx_Ez_left] <= y_top
-        )
-        x_idx_Hy_left = np.abs(self.x_Hy[0, :] - x_left).argmin()
-        y_mask_Hy_left = (self.y_Hy[:, x_idx_Hy_left] >= y_bot) & (
-            self.y_Hy[:, x_idx_Hy_left] <= y_top
-        )
-
         self.Jz[self.yidx_Jz, self.xidx_Jz] = self.Jz_xidx_yidx[time_index]
 
         # H update
@@ -282,29 +265,6 @@ class Solver:
             * (self.Ez[y1:y2, x1 + 1 : x2] - self.Ez[y1:y2, x1 : x2 - 1])
         )
 
-        # surface H
-        # left
-        self.Hy[y_mask_Hy_left, x_idx_Hy_left] -= -(
-            E0
-            / (
-                np.sqrt(
-                    self.mu[y_mask_Ez_left, x_idx_Ez_left]
-                    / self.epsilon[y_mask_Ez_left, x_idx_Ez_left]
-                )
-            )
-            * np.cos(
-                2.0 * np.pi * self.frequency * (self.t[time_index] - self.delta_t / 2)
-                - 2.0
-                * np.pi
-                * self.frequency
-                * np.sqrt(
-                    self.epsilon[y_mask_Ez_left, x_idx_Ez_left]
-                    * self.mu[y_mask_Ez_left, x_idx_Ez_left]
-                )
-                * self.x_Hy[y_mask_Hy_left, x_idx_Hy_left]
-            )
-        )
-
         # E update
         self.Ez_sx[y1:y2, x1:x2] = (1.0 / self.beta_x[y1:y2, x1:x2]) * (
             self.alpha_x[y1:y2, x1:x2] * self.Ez_sx[y1:y2, x1:x2]
@@ -319,20 +279,6 @@ class Solver:
             - self.Jz[y1:y2, x1:x2] / 2.0
         )
         self.Ez = self.Ez_sx + self.Ez_sy
-
-        # surface E
-        # left
-        self.Ez[y_mask_Ez_left, x_idx_Ez_left] -= E0 * np.cos(
-            2.0 * np.pi * self.frequency * self.t[time_index]
-            - 2.0
-            * np.pi
-            * self.frequency
-            * np.sqrt(
-                self.epsilon[y_mask_Ez_left, x_idx_Ez_left]
-                * self.mu[y_mask_Ez_left, x_idx_Ez_left]
-            )
-            * self.x_Ez[y_mask_Ez_left, x_idx_Ez_left]
-        )
 
         # save new fields to time index
         self.Ez_to_save[time_index] = self.Ez
