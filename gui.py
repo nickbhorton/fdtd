@@ -75,7 +75,7 @@ class TimeSeries:
             )
 
         self.depth, self.width, self.height = self.data.shape
-        self.max_field = np.median(
+        self.max_field = np.average(
             np.max(
                 (
                     np.abs(np.max(self.data, axis=(1, 2))),
@@ -170,10 +170,11 @@ class Solver:
         y_bot = (self.y_max - self.y_min) * percent_inset
         y_top = (self.y_max - self.y_min) * (1 - percent_inset)
 
-        self.sigma_x[self.x_Ez < x_left] = 10000.0
-        self.sigma_x[self.x_Ez > x_right] = 10000.0
-        self.sigma_y[self.y_Ez > y_top] = 10000.0
-        self.sigma_y[self.y_Ez < y_bot] = 10000.0
+        sigma_val = 1.0
+        self.sigma_x[self.x_Ez < x_left] = sigma_val
+        self.sigma_x[self.x_Ez > x_right] = sigma_val
+        self.sigma_y[self.y_Ez > y_top] = sigma_val
+        self.sigma_y[self.y_Ez < y_bot] = sigma_val
 
         # derived materials
         self.alpha_x = self.epsilon / self.delta_t - self.sigma_x / 2
@@ -243,8 +244,7 @@ class Solver:
         self.y_max = self.wavelengths_y * self.wavelength
 
     def field_time_step(self, time_index):
-
-        # update current
+        # Insert current source
         self.Jz[self.yidx_Jz, self.xidx_Jz] = self.Jz_xidx_yidx[time_index]
 
         x1 = 1
@@ -252,35 +252,70 @@ class Solver:
         y1 = 1
         y2 = self.Ez.shape[0] - 1
 
-        self.Hx[y1:y2, x1 : x2 - 1] = (1.0 / self.beta_y[y1:y2, x1 : x2 - 1]) * (
-            self.alpha_y[y1:y2, x1 : x2 - 1] * self.Hx[y1:y2, x1 : x2 - 1]
+        self.Jz[self.yidx_Jz, self.xidx_Jz] = self.Jz_xidx_yidx[time_index]
+
+        self.Hx[y1 : y2 - 1, x1:x2] = (1.0 / self.beta_y[y1 : y2 - 1, x1:x2]) * (
+            self.alpha_y[y1 : y2 - 1, x1:x2] * self.Hx[y1 : y2 - 1, x1:x2]
             - (
-                self.epsilon[y1:y2, x1 : x2 - 1]
-                / (self.mu[y1:y2, x1 : x2 - 1] * self.delta_y)
-            )
-            * (self.Ez[y1:y2, x1 + 1 : x2] - self.Ez[y1:y2, x1 : x2 - 1])
-        )
-        self.Hy[y1 : y2 - 1, x1:x2] = (1.0 / self.beta_x[y1 : y2 - 1, x1:x2]) * (
-            self.alpha_x[y1 : y2 - 1, x1:x2] * self.Hy[y1 : y2 - 1, x1:x2]
-            + (
                 self.epsilon[y1 : y2 - 1, x1:x2]
-                / (self.mu[y1 : y2 - 1, x1:x2] * self.delta_x)
+                / (self.mu[y1 : y2 - 1, x1:x2] * self.delta_y)
             )
             * (self.Ez[y1 + 1 : y2, x1:x2] - self.Ez[y1 : y2 - 1, x1:x2])
         )
+        # self.Hx[y1:y2, x1 : x2 - 1] = (1.0 / self.beta_y[y1:y2, x1 : x2 - 1]) * (
+        #     self.alpha_y[y1:y2, x1 : x2 - 1] * self.Hx[y1:y2, x1 : x2 - 1]
+        #     - (
+        #         self.epsilon[y1:y2, x1 : x2 - 1]
+        #         / (self.mu[y1:y2, x1 : x2 - 1] * self.delta_y)
+        #     )
+        #     * (self.Ez[y1:y2, x1 + 1 : x2] - self.Ez[y1:y2, x1 : x2 - 1])
+        # )
+
+        self.Hy[y1:y2, x1 : x2 - 1] = (1.0 / self.beta_x[y1:y2, x1 : x2 - 1]) * (
+            self.alpha_x[y1:y2, x1 : x2 - 1] * self.Hy[y1:y2, x1 : x2 - 1]
+            + (
+                self.epsilon[y1:y2, x1 : x2 - 1]
+                / (self.mu[y1:y2, x1 : x2 - 1] * self.delta_x)
+            )
+            * (self.Ez[y1:y2, x1 + 1 : x2] - self.Ez[y1:y2, x1 : x2 - 1])
+        )
+        # self.Hy[y1 : y2 - 1, x1:x2] = (1.0 / self.beta_x[y1 : y2 - 1, x1:x2]) * (
+        #     self.alpha_x[y1 : y2 - 1, x1:x2] * self.Hy[y1 : y2 - 1, x1:x2]
+        #     + (
+        #         self.epsilon[y1 : y2 - 1, x1:x2]
+        #         / (self.mu[y1 : y2 - 1, x1:x2] * self.delta_x)
+        #     )
+        #     * (self.Ez[y1 + 1 : y2, x1:x2] - self.Ez[y1 : y2 - 1, x1:x2])
+        # )
 
         self.Ez_sx[y1:y2, x1:x2] = (1.0 / self.beta_x[y1:y2, x1:x2]) * (
             self.alpha_x[y1:y2, x1:x2] * self.Ez_sx[y1:y2, x1:x2]
             + (1.0 / self.delta_x)
-            * (self.Hy[y1:y2, x1:x2] - self.Hy[y1 - 1 : y2 - 1, x1:x2])
+            * (self.Hy[y1:y2, x1:x2] - self.Hy[y1:y2, x1 - 1 : x2 - 1])
             - self.Jz[y1:y2, x1:x2] / 2.0
         )
+        # self.Ez_sx[y1:y2, x1:x2] = (1.0 / self.beta_x[y1:y2, x1:x2]) * (
+        #     self.alpha_x[y1:y2, x1:x2] * self.Ez_sx[y1:y2, x1:x2]
+        #     + (1.0 / self.delta_x)
+        #     * (self.Hy[y1:y2, x1:x2] - self.Hy[y1 - 1 : y2 - 1, x1:x2])
+        #     - self.Jz[y1:y2, x1:x2] / 2.0
+        # )
+
+        # Ez_sy depends on dHx/dy (difference along y-axis)
         self.Ez_sy[y1:y2, x1:x2] = (1.0 / self.beta_y[y1:y2, x1:x2]) * (
             self.alpha_y[y1:y2, x1:x2] * self.Ez_sy[y1:y2, x1:x2]
             - (1.0 / self.delta_y)
-            * (self.Hx[y1:y2, x1:x2] - self.Hx[y1:y2, x1 - 1 : x2 - 1])
+            * (self.Hx[y1:y2, x1:x2] - self.Hx[y1 - 1 : y2 - 1, x1:x2])
             - self.Jz[y1:y2, x1:x2] / 2.0
         )
+        # self.Ez_sy[y1:y2, x1:x2] = (1.0 / self.beta_y[y1:y2, x1:x2]) * (
+        #     self.alpha_y[y1:y2, x1:x2] * self.Ez_sy[y1:y2, x1:x2]
+        #     - (1.0 / self.delta_y)
+        #     * (self.Hx[y1:y2, x1:x2] - self.Hx[y1:y2, x1 - 1 : x2 - 1])
+        #     - self.Jz[y1:y2, x1:x2] / 2.0
+        # )
+
+        # Combine split components
         self.Ez = self.Ez_sx + self.Ez_sy
 
         # save new fields to time index
