@@ -4,24 +4,24 @@
     "background_mu_r": 1.0,
     "background_sigma": 0.0,
     "picoseconds": 1000.0,
-    "wavelengths_in_x": 3.0,
-    "wavelengths_in_y": 3.0,
-    "wavelength_discretization_x": 25,
-    "wavelength_discretization_y": 25,
-    "PML_inset_as_uniform": 0.2,
+    "wavelengths_in_x": 4.0,
+    "wavelengths_in_y": 4.0,
+    "wavelength_discretization_x": 50,
+    "wavelength_discretization_y": 50,
+    "PML_inset_as_uniform": 0.15,
     "left_boundary": "PML",
     "right_boundary": "PML",
     "top_boundary": "PML",
     "bot_boundary": "PML",
     "sigma_max": 1.0,
     "sigma_falloff_exponent": 2.0,
-    "colorbar_max_mean_in_periods": 3.0,
+    "colorbar_max_mean_in_periods": 4.0,
     "permittivity_circles": [
         [
-            0.0,
-            0.0,
-            0.0,
-            2.0
+            0.5,
+            0.5,
+            0.1,
+            4.0
         ]
     ]
 }

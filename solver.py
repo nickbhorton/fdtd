@@ -338,70 +338,158 @@ class Solver:
 
     def field_time_step(self, time_index):
         # Insert current source
-        self.Jz[self.yidx_Jz, self.xidx_Jz] = self.Jz_xidx_yidx[time_index]
+        # self.Jz[self.yidx_Jz, self.xidx_Jz] = self.Jz_xidx_yidx[time_index]
 
-        x_left = self.x_min + (self.x_max - self.x_min) * 0.3
-        x_right = self.x_min + (self.x_max - self.x_min) * (1.0 - 0.3)
-        y_bot = self.y_min + (self.y_max - self.y_min) * 0.3
-        y_top = self.y_min + (self.y_max - self.y_min) * (1.0 - 0.3)
+        box_size = self.defaults["PML_inset_as_uniform"] + 0.01
+        x_left = self.x_min + (self.x_max - self.x_min) * box_size
+        x_right = self.x_min + (self.x_max - self.x_min) * (1.0 - box_size)
+        y_bot = self.y_min + (self.y_max - self.y_min) * box_size
+        y_top = self.y_min + (self.y_max - self.y_min) * (1.0 - box_size)
 
         # mask creation
-        x_idx_Ez_left = np.abs(self.x_Ez[0, :] - x_left).argmin()
-        y_mask_Ez_left = (self.y_Ez[:, x_idx_Ez_left] >= y_bot) & (
-            self.y_Ez[:, x_idx_Ez_left] <= y_top
-        )
-        x_idx_Hy_left = np.abs(self.x_Hy[0, :] - x_left).argmin()
-        y_mask_Hy_left = (self.y_Hy[:, x_idx_Hy_left] >= y_bot) & (
-            self.y_Hy[:, x_idx_Hy_left] <= y_top
-        )
+        x_idx_left = np.abs(self.x_Ez[0, :] - x_left).argmin()
+        x_idx_right = np.abs(self.x_Ez[0, :] - x_right).argmin()
+        y_idx_bot = np.abs(self.y_Ez[:, 0] - y_bot).argmin()
+        y_idx_top = np.abs(self.y_Ez[:, 0] - y_top).argmin()
+        # print(x_idx_left, x_idx_right, y_idx_bot, y_idx_top)
 
-        # H update
+        # Hx update
+        Hx_prev = self.Hx.copy()
         self.Hx[1:-1, :] = (1.0 / self.beta_y_Hx[1:-1, :]) * (
             self.alpha_y_Hx[1:-1, :] * self.Hx[1:-1, :]
             - (self.epsilon_Hx[1:-1, :] / (self.mu_Hx[1:-1, :] * self.delta_y))
             * (self.Ez[2:-1, :] - self.Ez[1:-2, :])
         )
-        # Hy_prev = self.Hy[y_mask_Hy_left, x_idx_Hy_left]
+        # surface Hx update bot
+        self.Hx[y_idx_bot - 1, x_idx_left : x_idx_right + 1] = (
+            1.0 / self.beta_y_Hx[y_idx_bot - 1, x_idx_left : x_idx_right + 1]
+        ) * (
+            self.alpha_y_Hx[y_idx_bot - 1, x_idx_left : x_idx_right + 1]
+            * Hx_prev[y_idx_bot - 1, x_idx_left : x_idx_right + 1]
+            - (
+                self.epsilon_Hx[y_idx_bot - 1, x_idx_left : x_idx_right + 1]
+                / (
+                    self.mu_Hx[y_idx_bot - 1, x_idx_left : x_idx_right + 1]
+                    * self.delta_y
+                )
+            )
+            * (
+                (
+                    self.Ez[y_idx_bot, x_idx_left : x_idx_right + 1]
+                    - Ez_pw(
+                        self.frequency,
+                        self.x_Ez[y_idx_bot, x_idx_left : x_idx_right + 1],
+                        self.t[time_index] - self.delta_t / 2,
+                        1.0,
+                    )
+                )
+                - self.Ez[y_idx_bot - 1, x_idx_left : x_idx_right + 1]
+            )
+        )
+        # surface Hx update top
+        self.Hx[y_idx_top, x_idx_left : x_idx_right + 1] = (
+            1.0 / self.beta_y_Hx[y_idx_top, x_idx_left : x_idx_right + 1]
+        ) * (
+            self.alpha_y_Hx[y_idx_top, x_idx_left : x_idx_right + 1]
+            * Hx_prev[y_idx_top, x_idx_left : x_idx_right + 1]
+            - (
+                self.epsilon_Hx[y_idx_top, x_idx_left : x_idx_right + 1]
+                / (self.mu_Hx[y_idx_top, x_idx_left : x_idx_right + 1] * self.delta_y)
+            )
+            * (
+                self.Ez[y_idx_top + 1, x_idx_left : x_idx_right + 1]
+                - (
+                    self.Ez[y_idx_top, x_idx_left : x_idx_right + 1]
+                    - Ez_pw(
+                        self.frequency,
+                        self.x_Ez[y_idx_top - 1, x_idx_left : x_idx_right + 1],
+                        self.t[time_index] - self.delta_t / 2,
+                        1.0,
+                    )
+                )
+            )
+        )
+
+        # Hy update
+        Hy_prev = self.Hy.copy()
         self.Hy[:, 1:-1] = (1.0 / self.beta_x_Hy[:, 1:-1]) * (
             self.alpha_x_Hy[:, 1:-1] * self.Hy[:, 1:-1]
             + (self.epsilon_Hy[:, 1:-1] / (self.mu_Hy[:, 1:-1] * self.delta_x))
             * (self.Ez[:, 2:-1] - self.Ez[:, 1:-2])
         )
+        # surface Hy update left
+        self.Hy[y_idx_bot : y_idx_top + 1, x_idx_left - 1] = (
+            1.0 / self.beta_x_Hy[y_idx_bot : y_idx_top + 1, x_idx_left - 1]
+        ) * (
+            self.alpha_x_Hy[y_idx_bot : y_idx_top + 1, x_idx_left - 1]
+            * Hy_prev[y_idx_bot : y_idx_top + 1, x_idx_left - 1]
+            + (
+                self.epsilon_Hy[y_idx_bot : y_idx_top + 1, x_idx_left - 1]
+                / (self.mu_Hy[y_idx_bot : y_idx_top + 1, x_idx_left - 1] * self.delta_x)
+            )
+            * (
+                (
+                    self.Ez[y_idx_bot : y_idx_top + 1, x_idx_left]
+                    - Ez_pw(
+                        self.frequency,
+                        self.x_Ez[y_idx_bot : y_idx_top + 1, x_idx_left],
+                        self.t[time_index] - self.delta_t / 2,
+                        1.0,
+                    )
+                )
+                - self.Ez[y_idx_bot : y_idx_top + 1, x_idx_left - 1]
+            )
+        )
 
-        # surface H update
-        # print(x_idx_Ez_left, x_idx_Hy_left, y_mask_Ez_left, y_mask_Hy_left)
-        # self.Hy[y_mask_Hy_left, x_idx_Hy_left] = (
-        #     1.0 / self.beta_x_Ez[y_mask_Ez_left, x_idx_Ez_left]
-        # ) * (
-        #     self.alpha_x_Ez[y_mask_Ez_left, x_idx_Ez_left] * Hy_prev
-        #     + (
-        #         self.epsilon_Ez[y_mask_Ez_left, x_idx_Ez_left]
-        #         / (self.mu_Ez[y_mask_Ez_left, x_idx_Ez_left] * self.delta_x)
-        #     )
-        #     * (
-        #         self.Ez[y_mask_Ez_left, x_idx_Ez_left + 1]
-        #         - self.Ez[y_mask_Ez_left, x_idx_Ez_left - 1]
-        #         + Ez_pw(
-        #             self.frequency,
-        #             self.x_Ez[y_mask_Ez_left, x_idx_Ez_left],
-        #             self.t[time_index],
-        #             1.0,
-        #         )  # make left side a tot field by adding Ez_i
-        #     )
-        # )
-
-        # E update
+        # Ez_sx update
+        Ez_sx_prev = self.Ez_sx.copy()
         self.Ez_sx[1:-1, 1:-1] = (1.0 / self.beta_x_Ez[1:-1, 1:-1]) * (
             self.alpha_x_Ez[1:-1, 1:-1] * self.Ez_sx[1:-1, 1:-1]
             + (1.0 / self.delta_x) * (self.Hy[1:-1, 1:] - self.Hy[1:-1, :-1])
             - self.Jz[1:-1, 1:-1] / 2.0
         )
+
+        # surface Ez_sz update left
+        self.Ez_sx[y_idx_bot : y_idx_top + 1, x_idx_left] = (
+            1.0 / self.beta_x_Ez[y_idx_bot : y_idx_top + 1, x_idx_left]
+        ) * (
+            self.alpha_x_Ez[y_idx_bot : y_idx_top + 1, x_idx_left]
+            * Ez_sx_prev[y_idx_bot : y_idx_top + 1, x_idx_left]
+            + (1.0 / self.delta_x)
+            * (
+                self.Hy[y_idx_bot : y_idx_top + 1, x_idx_left]
+                - (
+                    self.Hy[y_idx_bot : y_idx_top + 1, x_idx_left - 1]
+                    + Hy_pw(
+                        self.frequency,
+                        self.x_Hy[y_idx_bot : y_idx_top + 1, x_idx_left - 1],
+                        self.t[time_index],
+                        1.0,
+                    )
+                )
+            )
+            - self.Jz[y_idx_bot : y_idx_top + 1, x_idx_left] / 2.0
+        )
+
+        # Ez_sy update
+        Ez_sy_prev = self.Ez_sy.copy()
         self.Ez_sy[1:-1, 1:-1] = (1.0 / self.beta_y_Ez[1:-1, 1:-1]) * (
             self.alpha_y_Ez[1:-1, 1:-1] * self.Ez_sy[1:-1, 1:-1]
             - (1.0 / self.delta_y) * (self.Hx[1:, 1:-1] - self.Hx[0:-1, 1:-1])
             - self.Jz[1:-1, 1:-1] / 2.0
         )
+
         self.Ez = self.Ez_sx + self.Ez_sy
+
+        # self.Ez[np.abs(self.Ez) > 100.0] = 0.0
+        # self.Hx[
+        #     np.abs(self.Hx)
+        #     > 100.0 / np.sqrt(self.mu_background / self.epsilon_background)
+        # ] = 100.0
+        # self.Hy[
+        #     np.abs(self.Hy)
+        #     > 100.0 / np.sqrt(self.mu_background / self.epsilon_background)
+        # ] = 100.0
 
         # save new fields to time index
         self.Ez_to_save[time_index] = self.Ez

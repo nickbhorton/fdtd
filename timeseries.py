@@ -24,15 +24,21 @@ class TimeSeries:
             )
 
         self.depth, self.width, self.height = self.data.shape
-        self.max_field = np.average(
-            np.max(
-                (
-                    np.abs(np.max(self.data, axis=(1, 2))),
-                    np.abs(np.min(self.data, axis=(1, 2))),
-                ),
-                axis=0,
-            )[:average_over_count]
-        )
+        if (
+            len(self.data[self.data != 0.0]) == 0
+            or len(self.data[self.data != 0.0]) == 0
+        ):
+            self.max_field = 1.0
+        else:
+            self.max_field = np.average(
+                np.max(
+                    (
+                        np.abs(np.max(self.data[self.data != 0.0])),
+                        np.abs(np.min(self.data[self.data != 0.0])),
+                    ),
+                    axis=0,
+                )
+            )
 
     def get_rgba_in_bwr(self, time_index, scale=1.0):
         # partially from Gemini
