@@ -14,20 +14,20 @@ from timeseries import TimeSeries
 
 
 def mgpulse(t, t_sig, frequency):
-    # result = np.exp(-0.5 * (t / t_sig) ** 2) * np.sin(2.0 * np.pi * frequency * t)
-    result = np.sin(2.0 * np.pi * frequency * t)
+    result = np.exp(-0.5 * (t / t_sig) ** 2) * np.sin(2.0 * np.pi * frequency * t)
+    # result = np.sin(2.0 * np.pi * frequency * t)
     return result
 
 
 def Ez_pw(frequency, x, t, eps_r, mu_r=1.0, E0=1.0):
     v_phase = materials_to_phase_velocity(eps_r * epsilon_0, mu_0 * mu_r)
-    coord = t - x / v_phase
+    coord = (t - 500e-12) - x / v_phase
     return E0 * mgpulse(coord, 1 / frequency, frequency)
 
 
 def Hy_pw(frequency, x, t, eps_r, mu_r=1.0, E0=1.0):
     v_phase = materials_to_phase_velocity(eps_r * epsilon_0, mu_0 * mu_r)
-    coord = t - x / v_phase
+    coord = (t - 500e-12) - x / v_phase
     eta = np.sqrt(mu_r * mu_0 / eps_r / epsilon_0)
     return -E0 / eta * mgpulse(coord, 1 / frequency, frequency)
 
@@ -341,7 +341,7 @@ class Solver:
         # Insert current source
         # self.Jz[self.yidx_Jz, self.xidx_Jz] = self.Jz_xidx_yidx[time_index]
 
-        box_size = self.defaults["PML_inset_as_uniform"] + 0.3
+        box_size = self.defaults["PML_inset_as_uniform"] + 0.1
         x_left = self.x_min + (self.x_max - self.x_min) * box_size
         x_right = self.x_min + (self.x_max - self.x_min) * (1.0 - box_size)
         y_bot = self.y_min + (self.y_max - self.y_min) * box_size
@@ -441,7 +441,31 @@ class Solver:
                 - self.Ez[y_idx_bot : y_idx_top + 1, x_idx_left - 1]
             )
         )
+        # surface Hy update right
+        self.Hy[y_idx_bot : y_idx_top + 1, x_idx_right] = (
+            1.0 / self.beta_x_Hy[y_idx_bot : y_idx_top + 1, x_idx_right]
+        ) * (
+            self.alpha_x_Hy[y_idx_bot : y_idx_top + 1, x_idx_right]
+            * Hy_prev[y_idx_bot : y_idx_top + 1, x_idx_right]
+            + (
+                self.epsilon_Hy[y_idx_bot : y_idx_top + 1, x_idx_right]
+                / (self.mu_Hy[y_idx_bot : y_idx_top + 1, x_idx_right] * self.delta_x)
+            )
+            * (
+                self.Ez[y_idx_bot : y_idx_top + 1, x_idx_right + 1]
+                - (
+                    self.Ez[y_idx_bot : y_idx_top + 1, x_idx_right]
+                    - Ez_pw(
+                        self.frequency,
+                        self.x_Ez[y_idx_bot : y_idx_top + 1, x_idx_right],
+                        self.t[time_index] - self.delta_t / 2,
+                        1.0,
+                    )
+                )
+            )
+        )
 
+        # E update
         # Ez_sx update
         Ez_sx_prev = self.Ez_sx.copy()
         self.Ez_sx[1:-1, 1:-1] = (1.0 / self.beta_x_Ez[1:-1, 1:-1]) * (
@@ -450,7 +474,7 @@ class Solver:
             - self.Jz[1:-1, 1:-1] / 2.0
         )
 
-        # surface Ez_sz update left
+        # surface Ez_sx update left
         self.Ez_sx[y_idx_bot : y_idx_top + 1, x_idx_left] = (
             1.0 / self.beta_x_Ez[y_idx_bot : y_idx_top + 1, x_idx_left]
         ) * (
@@ -472,8 +496,29 @@ class Solver:
             - self.Jz[y_idx_bot : y_idx_top + 1, x_idx_left] / 2.0
         )
 
+        self.Ez_sx[y_idx_bot : y_idx_top + 1, x_idx_right] = (
+            1.0 / self.beta_x_Ez[y_idx_bot : y_idx_top + 1, x_idx_right]
+        ) * (
+            self.alpha_x_Ez[y_idx_bot : y_idx_top + 1, x_idx_right]
+            * Ez_sx_prev[y_idx_bot : y_idx_top + 1, x_idx_right]
+            + (1.0 / self.delta_x)
+            * (
+                (
+                    self.Hy[y_idx_bot : y_idx_top + 1, x_idx_right]
+                    + Hy_pw(
+                        self.frequency,
+                        self.x_Hy[y_idx_bot : y_idx_top + 1, x_idx_right],
+                        self.t[time_index],
+                        1.0,
+                    )
+                )
+                - self.Hy[y_idx_bot : y_idx_top + 1, x_idx_right - 1]
+            )
+            - self.Jz[y_idx_bot : y_idx_top + 1, x_idx_right] / 2.0
+        )
+
         # Ez_sy update
-        Ez_sy_prev = self.Ez_sy.copy()
+        # Ez_sy_prev = self.Ez_sy.copy()
         self.Ez_sy[1:-1, 1:-1] = (1.0 / self.beta_y_Ez[1:-1, 1:-1]) * (
             self.alpha_y_Ez[1:-1, 1:-1] * self.Ez_sy[1:-1, 1:-1]
             - (1.0 / self.delta_y) * (self.Hx[1:, 1:-1] - self.Hx[0:-1, 1:-1])
@@ -481,16 +526,6 @@ class Solver:
         )
 
         self.Ez = self.Ez_sx + self.Ez_sy
-
-        # self.Ez[np.abs(self.Ez) > 100.0] = 0.0
-        # self.Hx[
-        #     np.abs(self.Hx)
-        #     > 100.0 / np.sqrt(self.mu_background / self.epsilon_background)
-        # ] = 100.0
-        # self.Hy[
-        #     np.abs(self.Hy)
-        #     > 100.0 / np.sqrt(self.mu_background / self.epsilon_background)
-        # ] = 100.0
 
         # save new fields to time index
         self.Ez_to_save[time_index] = self.Ez
