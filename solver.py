@@ -14,7 +14,8 @@ from timeseries import TimeSeries
 
 
 def mgpulse(t, t_sig, frequency):
-    result = np.exp(-0.5 * (t / t_sig) ** 2) * np.sin(2.0 * np.pi * frequency * t)
+    # result = np.exp(-0.5 * (t / t_sig) ** 2) * np.sin(2.0 * np.pi * frequency * t)
+    result = np.sin(2.0 * np.pi * frequency * t)
     return result
 
 
@@ -340,7 +341,7 @@ class Solver:
         # Insert current source
         # self.Jz[self.yidx_Jz, self.xidx_Jz] = self.Jz_xidx_yidx[time_index]
 
-        box_size = self.defaults["PML_inset_as_uniform"] + 0.01
+        box_size = self.defaults["PML_inset_as_uniform"] + 0.3
         x_left = self.x_min + (self.x_max - self.x_min) * box_size
         x_right = self.x_min + (self.x_max - self.x_min) * (1.0 - box_size)
         y_bot = self.y_min + (self.y_max - self.y_min) * box_size
