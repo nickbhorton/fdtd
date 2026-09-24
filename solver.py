@@ -13,6 +13,24 @@ from lib import (
 from timeseries import TimeSeries
 
 
+def mgpulse(t, t_sig, frequency):
+    result = np.exp(-0.5 * (t / t_sig) ** 2) * np.sin(2.0 * np.pi * frequency * t)
+    return result
+
+
+def Ez_pw(frequency, x, t, eps_r, mu_r=1.0, E0=1.0):
+    v_phase = materials_to_phase_velocity(eps_r * epsilon_0, mu_0 * mu_r)
+    coord = t - x / v_phase
+    return E0 * mgpulse(coord, 1 / frequency, frequency)
+
+
+def Hy_pw(frequency, x, t, eps_r, mu_r=1.0, E0=1.0):
+    v_phase = materials_to_phase_velocity(eps_r * epsilon_0, mu_0 * mu_r)
+    coord = t - x / v_phase
+    eta = np.sqrt(mu_r * mu_0 / eps_r / epsilon_0)
+    return -E0 / eta * mgpulse(coord, 1 / frequency, frequency)
+
+
 class Solver:
     def __init__(self, defaults_path: Path):
         self.defaults = json.loads(defaults_path.read_text())
@@ -180,9 +198,7 @@ class Solver:
         self.yidx_Jz = int(self.x_Ez.shape[0] / 2)
         self.t = np.arange(0.0, self.picoseconds * 1e-12, self.delta_t)
         self.period = 1 / self.frequency
-        self.Jz_xidx_yidx = np.exp(-0.5 * (self.t / self.period) ** 2) * np.sin(
-            2 * np.pi * self.frequency * self.t
-        )
+        self.Jz_xidx_yidx = mgpulse(self.t, self.period, self.frequency)
 
         # relocate temp fields
         self.Jz = np.zeros_like(self.x_Ez)
@@ -279,6 +295,9 @@ class Solver:
             - self.Jz[y1:y2, x1:x2] / 2.0
         )
         self.Ez = self.Ez_sx + self.Ez_sy
+
+        # self.Ez = Ez_pw(self.frequency, self.x_Ez, self.t[time_index], 1.0)
+        # self.Hy = Hy_pw(self.frequency, self.x_Hy, self.t[time_index], 1.0)
 
         # save new fields to time index
         self.Ez_to_save[time_index] = self.Ez

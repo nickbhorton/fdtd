@@ -165,7 +165,7 @@ class App:
     def update_field_type(self, sender, app_data):
         if app_data == "Ez":
             self.time_series_index = 0
-        elif app_data == "Hy":
+        elif app_data == "Hx":
             self.time_series_index = 1
         else:
             self.time_series_index = 2
