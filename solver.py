@@ -67,12 +67,10 @@ class Solver:
 
         self.x_Ez = np.arange(self.x_min, self.x_max, self.delta_x)
         self.y_Ez = np.arange(self.y_min, self.y_max, self.delta_y)
-
-        self.x_Hx = (self.x_Ez + self.delta_x / 2)[:-1]
-        self.y_Hx = self.y_Ez
-
-        self.x_Hy = self.x_Ez
-        self.y_Hy = (self.y_Ez + self.delta_y / 2)[:-1]
+        self.x_Hx = self.x_Ez
+        self.y_Hx = (self.y_Ez + self.delta_y / 2)[:-1]
+        self.x_Hy = (self.x_Ez + self.delta_x / 2)[:-1]
+        self.y_Hy = self.y_Ez
 
         self.x_Ez, self.y_Ez = np.meshgrid(self.x_Ez, self.y_Ez)
         self.x_Hx, self.y_Hx = np.meshgrid(self.x_Hx, self.y_Hx)
@@ -83,13 +81,21 @@ class Solver:
         )
 
         # setup materials
-        self.epsilon = np.ones_like(self.x_Ez) * self.epsilon_background
+        self.epsilon_Ez = np.ones_like(self.x_Ez) * self.epsilon_background
+        self.epsilon_Hx = np.ones_like(self.x_Hx) * self.epsilon_background
+        self.epsilon_Hy = np.ones_like(self.x_Hy) * self.epsilon_background
 
         for x0, y0, radius, eps_r in self.defaults["permittivity_circles"]:
             xc = self.x_min + (self.x_max - self.x_min) * x0
             yc = self.y_min + (self.y_max - self.y_min) * y0
             rr = (self.x_max - self.x_min) * radius
-            self.epsilon[(self.x_Ez - xc) ** 2 + (self.y_Ez - yc) ** 2 < rr**2] = (
+            self.epsilon_Ez[(self.x_Ez - xc) ** 2 + (self.y_Ez - yc) ** 2 < rr**2] = (
+                eps_r * epsilon_0
+            )
+            self.epsilon_Hx[(self.x_Hx - xc) ** 2 + (self.y_Hx - yc) ** 2 < rr**2] = (
+                eps_r * epsilon_0
+            )
+            self.epsilon_Hy[(self.x_Hy - xc) ** 2 + (self.y_Hy - yc) ** 2 < rr**2] = (
                 eps_r * epsilon_0
             )
 
@@ -100,12 +106,23 @@ class Solver:
         # plt.show()
         # exit(0)
 
-        self.mu = np.ones_like(self.x_Ez) * self.mu_background
-        self.sigma_x = np.zeros_like(self.x_Ez)
-        self.sigma_y = np.zeros_like(self.x_Ez)
+        self.mu_Ez = np.ones_like(self.x_Ez) * self.mu_background
+        self.mu_Hx = np.ones_like(self.x_Hx) * self.mu_background
+        self.mu_Hy = np.ones_like(self.x_Hy) * self.mu_background
 
-        x_line = self.x_Ez[0, :]
-        y_line = self.y_Ez[:, 0]
+        self.sigma_x_Ez = np.zeros_like(self.x_Ez)
+        self.sigma_y_Ez = np.zeros_like(self.x_Ez)
+        self.sigma_x_Hx = np.zeros_like(self.x_Hx)
+        self.sigma_y_Hx = np.zeros_like(self.x_Hx)
+        self.sigma_x_Hy = np.zeros_like(self.x_Hy)
+        self.sigma_y_Hy = np.zeros_like(self.x_Hy)
+
+        x_line_Ez = self.x_Ez[0, :]
+        y_line_Ez = self.y_Ez[:, 0]
+        x_line_Hx = self.x_Hx[0, :]
+        y_line_Hx = self.y_Hx[:, 0]
+        x_line_Hy = self.x_Hy[0, :]
+        y_line_Hy = self.y_Hy[:, 0]
 
         percent_inset = self.defaults["PML_inset_as_uniform"]
         x_left = (self.x_max - self.x_min) * percent_inset
@@ -118,15 +135,33 @@ class Solver:
         falloff_exponent = self.defaults["sigma_falloff_exponent"]
         # x left
         if self.defaults["left_boundary"] == "PML":
-            x_line_left = x_line[x_line < x_left]
-            x_line_left = (x_line_left - np.min(x_line_left)) / (
-                np.max(x_line_left) - np.min(x_line_left)
+            x_line_left_Ez = x_line_Ez[x_line_Ez < x_left]
+            x_line_left_Ez = (x_line_left_Ez - np.min(x_line_left_Ez)) / (
+                np.max(x_line_left_Ez) - np.min(x_line_left_Ez)
             )
-            x_line_left = x_line_left[::-1]
-            x_line_left = x_line_left**falloff_exponent
-            x_line_left *= sigma_max
-            for i in range(len(x_line)):
-                self.sigma_x[i, :][x_line < x_left] = x_line_left
+            x_line_left_Ez = x_line_left_Ez[::-1]
+            x_line_left_Ez = x_line_left_Ez**falloff_exponent
+            x_line_left_Ez *= sigma_max
+            x_line_left_Hx = x_line_Hx[x_line_Hx < x_left]
+            x_line_left_Hx = (x_line_left_Hx - np.min(x_line_left_Hx)) / (
+                np.max(x_line_left_Hx) - np.min(x_line_left_Hx)
+            )
+            x_line_left_Hx = x_line_left_Hx[::-1]
+            x_line_left_Hx = x_line_left_Hx**falloff_exponent
+            x_line_left_Hx *= sigma_max
+            x_line_left_Hy = x_line_Hy[x_line_Hy < x_left]
+            x_line_left_Hy = (x_line_left_Hy - np.min(x_line_left_Hy)) / (
+                np.max(x_line_left_Hy) - np.min(x_line_left_Hy)
+            )
+            x_line_left_Hy = x_line_left_Hy[::-1]
+            x_line_left_Hy = x_line_left_Hy**falloff_exponent
+            x_line_left_Hy *= sigma_max
+            for i in range(self.sigma_x_Ez.shape[0]):
+                self.sigma_x_Ez[i, :][x_line_Ez < x_left] = x_line_left_Ez
+            for i in range(self.sigma_x_Hx.shape[0]):
+                self.sigma_x_Hx[i, :][x_line_Hx < x_left] = x_line_left_Hx
+            for i in range(self.sigma_x_Hy.shape[0]):
+                self.sigma_x_Hy[i, :][x_line_Hy < x_left] = x_line_left_Hy
         elif self.defaults["left_boundary"] == "PEC":
             pass
         else:
@@ -134,14 +169,30 @@ class Solver:
 
         # x right
         if self.defaults["right_boundary"] == "PML":
-            x_line_right = x_line[x_line > x_right]
-            x_line_right = (x_line_right - np.min(x_line_right)) / (
-                np.max(x_line_right) - np.min(x_line_right)
+            x_line_right_Ez = x_line_Ez[x_line_Ez > x_right]
+            x_line_right_Ez = (x_line_right_Ez - np.min(x_line_right_Ez)) / (
+                np.max(x_line_right_Ez) - np.min(x_line_right_Ez)
             )
-            x_line_right = x_line_right**falloff_exponent
-            x_line_right *= sigma_max
-            for i in range(len(x_line)):
-                self.sigma_x[i, :][x_line > x_right] = x_line_right
+            x_line_right_Ez = x_line_right_Ez**falloff_exponent
+            x_line_right_Ez *= sigma_max
+            x_line_right_Hx = x_line_Hx[x_line_Hx > x_right]
+            x_line_right_Hx = (x_line_right_Hx - np.min(x_line_right_Hx)) / (
+                np.max(x_line_right_Hx) - np.min(x_line_right_Hx)
+            )
+            x_line_right_Hx = x_line_right_Hx**falloff_exponent
+            x_line_right_Hx *= sigma_max
+            x_line_right_Hy = x_line_Hy[x_line_Hy > x_right]
+            x_line_right_Hy = (x_line_right_Hy - np.min(x_line_right_Hy)) / (
+                np.max(x_line_right_Hy) - np.min(x_line_right_Hy)
+            )
+            x_line_right_Hy = x_line_right_Hy**falloff_exponent
+            x_line_right_Hy *= sigma_max
+            for i in range(self.sigma_x_Ez.shape[0]):
+                self.sigma_x_Ez[i, :][x_line_Ez > x_right] = x_line_right_Ez
+            for i in range(self.sigma_x_Hx.shape[0]):
+                self.sigma_x_Hx[i, :][x_line_Hx > x_right] = x_line_right_Hx
+            for i in range(self.sigma_x_Hy.shape[0]):
+                self.sigma_x_Hy[i, :][x_line_Hy > x_right] = x_line_right_Hy
         elif self.defaults["right_boundary"] == "PEC":
             pass
         else:
@@ -149,14 +200,30 @@ class Solver:
 
         # y top
         if self.defaults["top_boundary"] == "PML":
-            y_line_top = y_line[y_line > y_top]
-            y_line_top = (y_line_top - np.min(y_line_top)) / (
-                np.max(y_line_top) - np.min(y_line_top)
+            y_line_top_Ez = y_line_Ez[y_line_Ez > y_top]
+            y_line_top_Ez = (y_line_top_Ez - np.min(y_line_top_Ez)) / (
+                np.max(y_line_top_Ez) - np.min(y_line_top_Ez)
             )
-            y_line_top = y_line_top**falloff_exponent
-            y_line_top *= sigma_max
-            for i in range(len(y_line)):
-                self.sigma_y[:, i][y_line > y_top] = y_line_top
+            y_line_top_Ez = y_line_top_Ez**falloff_exponent
+            y_line_top_Ez *= sigma_max
+            y_line_top_Hx = y_line_Hx[y_line_Hx > y_top]
+            y_line_top_Hx = (y_line_top_Hx - np.min(y_line_top_Hx)) / (
+                np.max(y_line_top_Hx) - np.min(y_line_top_Hx)
+            )
+            y_line_top_Hx = y_line_top_Hx**falloff_exponent
+            y_line_top_Hx *= sigma_max
+            y_line_top_Hy = y_line_Hy[y_line_Hy > y_top]
+            y_line_top_Hy = (y_line_top_Hy - np.min(y_line_top_Hy)) / (
+                np.max(y_line_top_Hy) - np.min(y_line_top_Hy)
+            )
+            y_line_top_Hy = y_line_top_Hy**falloff_exponent
+            y_line_top_Hy *= sigma_max
+            for i in range(self.sigma_x_Ez.shape[1]):
+                self.sigma_y_Ez[:, i][y_line_Ez > y_top] = y_line_top_Ez
+            for i in range(self.sigma_x_Hx.shape[1]):
+                self.sigma_y_Hx[:, i][y_line_Hx > y_top] = y_line_top_Hx
+            for i in range(self.sigma_x_Hy.shape[1]):
+                self.sigma_y_Hy[:, i][y_line_Hy > y_top] = y_line_top_Hy
         elif self.defaults["top_boundary"] == "PEC":
             pass
         else:
@@ -164,34 +231,51 @@ class Solver:
 
         # y bot
         if self.defaults["bot_boundary"] == "PML":
-            y_line_bot = y_line[y_line < y_bot]
-            y_line_bot = (y_line_bot - np.min(y_line_bot)) / (
-                np.max(y_line_bot) - np.min(y_line_bot)
+            y_line_bot_Ez = y_line_Ez[y_line_Ez < y_bot]
+            y_line_bot_Ez = (y_line_bot_Ez - np.min(y_line_bot_Ez)) / (
+                np.max(y_line_bot_Ez) - np.min(y_line_bot_Ez)
             )
-            y_line_bot = y_line_bot[::-1]
-            y_line_bot = y_line_bot**falloff_exponent
-            y_line_bot *= sigma_max
-            for i in range(len(y_line)):
-                self.sigma_y[:, i][y_line < y_bot] = y_line_bot
+            y_line_bot_Ez = y_line_bot_Ez[::-1]
+            y_line_bot_Ez = y_line_bot_Ez**falloff_exponent
+            y_line_bot_Ez *= sigma_max
+            y_line_bot_Hx = y_line_Hx[y_line_Hx < y_bot]
+            y_line_bot_Hx = (y_line_bot_Hx - np.min(y_line_bot_Hx)) / (
+                np.max(y_line_bot_Hx) - np.min(y_line_bot_Hx)
+            )
+            y_line_bot_Hx = y_line_bot_Hx[::-1]
+            y_line_bot_Hx = y_line_bot_Hx**falloff_exponent
+            y_line_bot_Hx *= sigma_max
+            y_line_bot_Hy = y_line_Hy[y_line_Hy < y_bot]
+            y_line_bot_Hy = (y_line_bot_Hy - np.min(y_line_bot_Hy)) / (
+                np.max(y_line_bot_Hy) - np.min(y_line_bot_Hy)
+            )
+            y_line_bot_Hy = y_line_bot_Hy[::-1]
+            y_line_bot_Hy = y_line_bot_Hy**falloff_exponent
+            y_line_bot_Hy *= sigma_max
+            for i in range(self.sigma_x_Ez.shape[1]):
+                self.sigma_y_Ez[:, i][y_line_Ez < y_bot] = y_line_bot_Ez
+            for i in range(self.sigma_x_Hx.shape[1]):
+                self.sigma_y_Hx[:, i][y_line_Hx < y_bot] = y_line_bot_Hx
+            for i in range(self.sigma_x_Hy.shape[1]):
+                self.sigma_y_Hy[:, i][y_line_Hy < y_bot] = y_line_bot_Hy
         elif self.defaults["bot_boundary"] == "PEC":
             pass
         else:
             print("defaults.bot_boundary can be either PML or PEC. Assuming PEC")
 
-        # plot sigmas
-        # fig, ax = plt.subplots(1, 2, figsize=(10, 5), layout="constrained")
-        # mesh1 = ax[0].pcolormesh(self.x_Ez, self.y_Ez, self.sigma_x, cmap="jet")
-        # fig.colorbar(mesh1)
-        # mesh2 = ax[1].pcolormesh(self.x_Ez, self.y_Ez, self.sigma_y, cmap="jet")
-        # fig.colorbar(mesh2)
-        # plt.show()
-        # exit(0)
-
         # derived materials
-        self.alpha_x = self.epsilon / self.delta_t - self.sigma_x / 2
-        self.alpha_y = self.epsilon / self.delta_t - self.sigma_y / 2
-        self.beta_x = self.epsilon / self.delta_t + self.sigma_x / 2
-        self.beta_y = self.epsilon / self.delta_t + self.sigma_y / 2
+        self.alpha_x_Ez = self.epsilon_Ez / self.delta_t - self.sigma_x_Ez / 2
+        self.alpha_y_Ez = self.epsilon_Ez / self.delta_t - self.sigma_y_Ez / 2
+        self.beta_x_Ez = self.epsilon_Ez / self.delta_t + self.sigma_x_Ez / 2
+        self.beta_y_Ez = self.epsilon_Ez / self.delta_t + self.sigma_y_Ez / 2
+        self.alpha_x_Hx = self.epsilon_Hx / self.delta_t - self.sigma_x_Hx / 2
+        self.alpha_y_Hx = self.epsilon_Hx / self.delta_t - self.sigma_y_Hx / 2
+        self.beta_x_Hx = self.epsilon_Hx / self.delta_t + self.sigma_x_Hx / 2
+        self.beta_y_Hx = self.epsilon_Hx / self.delta_t + self.sigma_y_Hx / 2
+        self.alpha_x_Hy = self.epsilon_Hy / self.delta_t - self.sigma_x_Hy / 2
+        self.alpha_y_Hy = self.epsilon_Hy / self.delta_t - self.sigma_y_Hy / 2
+        self.beta_x_Hy = self.epsilon_Hy / self.delta_t + self.sigma_x_Hy / 2
+        self.beta_y_Hy = self.epsilon_Hy / self.delta_t + self.sigma_y_Hy / 2
 
         # setup current stuff
         self.xidx_Jz = int(self.x_Ez.shape[0] / 2)
@@ -256,48 +340,68 @@ class Solver:
         # Insert current source
         self.Jz[self.yidx_Jz, self.xidx_Jz] = self.Jz_xidx_yidx[time_index]
 
-        x1 = 1
-        x2 = self.Ez.shape[1] - 1
-        y1 = 1
-        y2 = self.Ez.shape[0] - 1
+        x_left = self.x_min + (self.x_max - self.x_min) * 0.3
+        x_right = self.x_min + (self.x_max - self.x_min) * (1.0 - 0.3)
+        y_bot = self.y_min + (self.y_max - self.y_min) * 0.3
+        y_top = self.y_min + (self.y_max - self.y_min) * (1.0 - 0.3)
 
-        self.Jz[self.yidx_Jz, self.xidx_Jz] = self.Jz_xidx_yidx[time_index]
+        # mask creation
+        x_idx_Ez_left = np.abs(self.x_Ez[0, :] - x_left).argmin()
+        y_mask_Ez_left = (self.y_Ez[:, x_idx_Ez_left] >= y_bot) & (
+            self.y_Ez[:, x_idx_Ez_left] <= y_top
+        )
+        x_idx_Hy_left = np.abs(self.x_Hy[0, :] - x_left).argmin()
+        y_mask_Hy_left = (self.y_Hy[:, x_idx_Hy_left] >= y_bot) & (
+            self.y_Hy[:, x_idx_Hy_left] <= y_top
+        )
 
         # H update
-        self.Hx[y1 : y2 - 1, x1:x2] = (1.0 / self.beta_y[y1 : y2 - 1, x1:x2]) * (
-            self.alpha_y[y1 : y2 - 1, x1:x2] * self.Hx[y1 : y2 - 1, x1:x2]
-            - (
-                self.epsilon[y1 : y2 - 1, x1:x2]
-                / (self.mu[y1 : y2 - 1, x1:x2] * self.delta_y)
-            )
-            * (self.Ez[y1 + 1 : y2, x1:x2] - self.Ez[y1 : y2 - 1, x1:x2])
+        self.Hx[1:-1, :] = (1.0 / self.beta_y_Hx[1:-1, :]) * (
+            self.alpha_y_Hx[1:-1, :] * self.Hx[1:-1, :]
+            - (self.epsilon_Hx[1:-1, :] / (self.mu_Hx[1:-1, :] * self.delta_y))
+            * (self.Ez[2:-1, :] - self.Ez[1:-2, :])
         )
-        self.Hy[y1:y2, x1 : x2 - 1] = (1.0 / self.beta_x[y1:y2, x1 : x2 - 1]) * (
-            self.alpha_x[y1:y2, x1 : x2 - 1] * self.Hy[y1:y2, x1 : x2 - 1]
-            + (
-                self.epsilon[y1:y2, x1 : x2 - 1]
-                / (self.mu[y1:y2, x1 : x2 - 1] * self.delta_x)
-            )
-            * (self.Ez[y1:y2, x1 + 1 : x2] - self.Ez[y1:y2, x1 : x2 - 1])
+        # Hy_prev = self.Hy[y_mask_Hy_left, x_idx_Hy_left]
+        self.Hy[:, 1:-1] = (1.0 / self.beta_x_Hy[:, 1:-1]) * (
+            self.alpha_x_Hy[:, 1:-1] * self.Hy[:, 1:-1]
+            + (self.epsilon_Hy[:, 1:-1] / (self.mu_Hy[:, 1:-1] * self.delta_x))
+            * (self.Ez[:, 2:-1] - self.Ez[:, 1:-2])
         )
+
+        # surface H update
+        # print(x_idx_Ez_left, x_idx_Hy_left, y_mask_Ez_left, y_mask_Hy_left)
+        # self.Hy[y_mask_Hy_left, x_idx_Hy_left] = (
+        #     1.0 / self.beta_x_Ez[y_mask_Ez_left, x_idx_Ez_left]
+        # ) * (
+        #     self.alpha_x_Ez[y_mask_Ez_left, x_idx_Ez_left] * Hy_prev
+        #     + (
+        #         self.epsilon_Ez[y_mask_Ez_left, x_idx_Ez_left]
+        #         / (self.mu_Ez[y_mask_Ez_left, x_idx_Ez_left] * self.delta_x)
+        #     )
+        #     * (
+        #         self.Ez[y_mask_Ez_left, x_idx_Ez_left + 1]
+        #         - self.Ez[y_mask_Ez_left, x_idx_Ez_left - 1]
+        #         + Ez_pw(
+        #             self.frequency,
+        #             self.x_Ez[y_mask_Ez_left, x_idx_Ez_left],
+        #             self.t[time_index],
+        #             1.0,
+        #         )  # make left side a tot field by adding Ez_i
+        #     )
+        # )
 
         # E update
-        self.Ez_sx[y1:y2, x1:x2] = (1.0 / self.beta_x[y1:y2, x1:x2]) * (
-            self.alpha_x[y1:y2, x1:x2] * self.Ez_sx[y1:y2, x1:x2]
-            + (1.0 / self.delta_x)
-            * (self.Hy[y1:y2, x1:x2] - self.Hy[y1:y2, x1 - 1 : x2 - 1])
-            - self.Jz[y1:y2, x1:x2] / 2.0
+        self.Ez_sx[1:-1, 1:-1] = (1.0 / self.beta_x_Ez[1:-1, 1:-1]) * (
+            self.alpha_x_Ez[1:-1, 1:-1] * self.Ez_sx[1:-1, 1:-1]
+            + (1.0 / self.delta_x) * (self.Hy[1:-1, 1:] - self.Hy[1:-1, :-1])
+            - self.Jz[1:-1, 1:-1] / 2.0
         )
-        self.Ez_sy[y1:y2, x1:x2] = (1.0 / self.beta_y[y1:y2, x1:x2]) * (
-            self.alpha_y[y1:y2, x1:x2] * self.Ez_sy[y1:y2, x1:x2]
-            - (1.0 / self.delta_y)
-            * (self.Hx[y1:y2, x1:x2] - self.Hx[y1 - 1 : y2 - 1, x1:x2])
-            - self.Jz[y1:y2, x1:x2] / 2.0
+        self.Ez_sy[1:-1, 1:-1] = (1.0 / self.beta_y_Ez[1:-1, 1:-1]) * (
+            self.alpha_y_Ez[1:-1, 1:-1] * self.Ez_sy[1:-1, 1:-1]
+            - (1.0 / self.delta_y) * (self.Hx[1:, 1:-1] - self.Hx[0:-1, 1:-1])
+            - self.Jz[1:-1, 1:-1] / 2.0
         )
         self.Ez = self.Ez_sx + self.Ez_sy
-
-        # self.Ez = Ez_pw(self.frequency, self.x_Ez, self.t[time_index], 1.0)
-        # self.Hy = Hy_pw(self.frequency, self.x_Hy, self.t[time_index], 1.0)
 
         # save new fields to time index
         self.Ez_to_save[time_index] = self.Ez
