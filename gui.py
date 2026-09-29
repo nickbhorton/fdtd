@@ -40,13 +40,13 @@ class App:
                     default_value=self.solver.defaults["wavelength_discretization_y"],
                     callback=self.update_delta_y,
                 )
-                dpg.add_input_int(
+                dpg.add_input_float(
                     label="Wavelengths in x",
                     tag="lambda_x",
                     default_value=self.solver.wavelengths_x,
                     callback=self.update_lambda_x,
                 )
-                dpg.add_input_int(
+                dpg.add_input_float(
                     label="Wavelengths in y",
                     tag="lambda_y",
                     default_value=self.solver.wavelengths_y,

@@ -14,22 +14,30 @@ from timeseries import TimeSeries
 
 
 def mgpulse(t, t_sig, frequency):
-    result = np.exp(-0.5 * (t / t_sig) ** 2) * np.sin(2.0 * np.pi * frequency * t)
-    # result = np.sin(2.0 * np.pi * frequency * t)
+    # result = np.exp(-0.5 * (t / t_sig) ** 2) * np.sin(2.0 * np.pi * frequency * t)
+    result = np.sin(2.0 * np.pi * frequency * t)
     return result
 
 
+def sinusoid(frequency, t, x, eps_r=1.0, mu_r=1.0):
+    w = 2.0 * np.pi * frequency
+    k = w * np.sqrt(epsilon_0 * eps_r * mu_0 * mu_r)
+    return np.sin(w * t - k * x)
+
+
 def Ez_pw(frequency, x, t, eps_r, mu_r=1.0, E0=1.0):
-    v_phase = materials_to_phase_velocity(eps_r * epsilon_0, mu_0 * mu_r)
-    coord = (t - 500e-12) - x / v_phase
-    return E0 * mgpulse(coord, 1 / frequency, frequency)
+    # v_phase = materials_to_phase_velocity(eps_r * epsilon_0, mu_0 * mu_r)
+    # coord = t - x / v_phase
+    # return E0 * mgpulse(coord, 1 / frequency, frequency)
+    return E0 * sinusoid(frequency, t, x)
 
 
 def Hy_pw(frequency, x, t, eps_r, mu_r=1.0, E0=1.0):
-    v_phase = materials_to_phase_velocity(eps_r * epsilon_0, mu_0 * mu_r)
-    coord = (t - 500e-12) - x / v_phase
+    # v_phase = materials_to_phase_velocity(eps_r * epsilon_0, mu_0 * mu_r)
+    # coord = t - x / v_phase
     eta = np.sqrt(mu_r * mu_0 / eps_r / epsilon_0)
-    return -E0 / eta * mgpulse(coord, 1 / frequency, frequency)
+    # return -E0 / eta * mgpulse(coord, 1 / frequency, frequency)
+    return -E0 / eta * sinusoid(frequency, t, x)
 
 
 class Solver:
@@ -264,6 +272,29 @@ class Solver:
         else:
             print("defaults.bot_boundary can be either PML or PEC. Assuming PEC")
 
+        for x0, y0, radius, conductivity in self.defaults["conductivity_circles"]:
+            xc = self.x_min + (self.x_max - self.x_min) * x0
+            yc = self.y_min + (self.y_max - self.y_min) * y0
+            rr = (self.x_max - self.x_min) * radius
+            self.sigma_x_Ez[(self.x_Ez - xc) ** 2 + (self.y_Ez - yc) ** 2 < rr**2] = (
+                conductivity
+            )
+            self.sigma_y_Ez[(self.x_Ez - xc) ** 2 + (self.y_Ez - yc) ** 2 < rr**2] = (
+                conductivity
+            )
+            self.sigma_x_Hx[(self.x_Hx - xc) ** 2 + (self.y_Hx - yc) ** 2 < rr**2] = (
+                conductivity
+            )
+            self.sigma_y_Hx[(self.x_Hx - xc) ** 2 + (self.y_Hx - yc) ** 2 < rr**2] = (
+                conductivity
+            )
+            self.sigma_x_Hy[(self.x_Hy - xc) ** 2 + (self.y_Hy - yc) ** 2 < rr**2] = (
+                conductivity
+            )
+            self.sigma_y_Hy[(self.x_Hy - xc) ** 2 + (self.y_Hy - yc) ** 2 < rr**2] = (
+                conductivity
+            )
+
         # derived materials
         self.alpha_x_Ez = self.epsilon_Ez / self.delta_t - self.sigma_x_Ez / 2
         self.alpha_y_Ez = self.epsilon_Ez / self.delta_t - self.sigma_y_Ez / 2
@@ -341,7 +372,7 @@ class Solver:
         # Insert current source
         # self.Jz[self.yidx_Jz, self.xidx_Jz] = self.Jz_xidx_yidx[time_index]
 
-        box_size = self.defaults["PML_inset_as_uniform"] + 0.1
+        box_size = self.defaults["PML_inset_as_uniform"]
         x_left = self.x_min + (self.x_max - self.x_min) * box_size
         x_right = self.x_min + (self.x_max - self.x_min) * (1.0 - box_size)
         y_bot = self.y_min + (self.y_max - self.y_min) * box_size

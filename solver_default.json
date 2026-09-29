@@ -4,10 +4,10 @@
     "background_mu_r": 1.0,
     "background_sigma": 0.0,
     "picoseconds": 2000.0,
-    "wavelengths_in_x": 5.0,
-    "wavelengths_in_y": 5.0,
-    "wavelength_discretization_x": 50,
-    "wavelength_discretization_y": 50,
+    "wavelengths_in_x": 12.5,
+    "wavelengths_in_y": 12.5,
+    "wavelength_discretization_x": 15,
+    "wavelength_discretization_y": 15,
     "PML_inset_as_uniform": 0.1,
     "left_boundary": "PML",
     "right_boundary": "PML",
@@ -20,8 +20,16 @@
         [
             0.5,
             0.5,
-            0.2,
-            9.0
+            0.16,
+            4.0
+        ]
+    ],
+    "conductivity_circles": [
+        [
+            0.5,
+            0.5,
+            0.0,
+            1e7
         ]
     ]
 }
