@@ -2,6 +2,7 @@ import threading
 from pathlib import Path
 
 import dearpygui.dearpygui as dpg
+import numpy as np
 
 from lib import format_bytes
 from solver import Solver
@@ -13,6 +14,21 @@ class App:
         self.time_series_index = 0
 
         dpg.create_context()
+
+        with dpg.file_dialog(
+            directory_selector=False,
+            show=False,
+            callback=self.save_fields,
+            tag="file_dialog_tag",
+            width=600,
+            height=400,
+            default_filename="my_array.npz",
+        ):
+            # Restrict the user to saving as .npz files
+            dpg.add_file_extension(
+                ".npz", color=(0, 255, 0, 255), custom_text="[NumPy Zip]"
+            )
+            dpg.add_file_extension(".*")
 
         with dpg.window(tag="primary_window"):  # type: ignore
             with dpg.window(
@@ -62,6 +78,11 @@ class App:
                 dpg.add_progress_bar(
                     tag="solve_progress_bar", default_value=0.0, overlay="0%", width=-1
                 )
+                dpg.add_button(
+                    tag="save_button",
+                    label="Save Fields",
+                    callback=lambda: dpg.show_item("file_dialog_tag"),
+                )
             with dpg.window(
                 tag="show",
                 no_move=True,
@@ -109,6 +130,28 @@ class App:
         dpg.configure_item("show", pos=[half_width, 0], width=half_width, height=height)
 
         dpg.start_dearpygui()
+
+    def save_fields(self, sender, app_data):
+        file_path = app_data["file_path_name"]
+
+        if not file_path.endswith(".npz"):
+            file_path += ".npz"
+
+        data_dict = {
+            "x_Ez": self.solver.x_Ez,
+            "y_Ez": self.solver.y_Ez,
+            "t": self.solver.t,
+            "Ez": self.solver.time_series_array[0].data,
+            "x_left": self.solver.x_left,
+            "x_right": self.solver.x_right,
+            "y_top": self.solver.y_top,
+            "y_bot": self.solver.y_bot,
+        }
+
+        try:
+            np.savez_compressed(file_path, **data_dict)
+        except Exception as e:
+            print(f"Error saving file: {e}")
 
     def create_texture_first_time(self):
         with dpg.texture_registry(show=False, tag="my_texture_registry"):  # type: ignore

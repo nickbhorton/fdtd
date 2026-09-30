@@ -3,11 +3,11 @@
     "background_epsilon_r": 1.0,
     "background_mu_r": 1.0,
     "background_sigma": 0.0,
-    "picoseconds": 2000.0,
+    "picoseconds": 4000.0,
     "wavelengths_in_x": 12.5,
     "wavelengths_in_y": 12.5,
-    "wavelength_discretization_x": 15,
-    "wavelength_discretization_y": 15,
+    "wavelength_discretization_x": 25,
+    "wavelength_discretization_y": 25,
     "PML_inset_as_uniform": 0.1,
     "left_boundary": "PML",
     "right_boundary": "PML",
@@ -20,7 +20,7 @@
         [
             0.5,
             0.5,
-            0.16,
+            0.0,
             4.0
         ]
     ],
@@ -28,7 +28,7 @@
         [
             0.5,
             0.5,
-            0.0,
+            0.16,
             1e7
         ]
     ]

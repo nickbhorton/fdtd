@@ -13,9 +13,10 @@ from lib import (
 from timeseries import TimeSeries
 
 
-def mgpulse(t, t_sig, frequency):
-    # result = np.exp(-0.5 * (t / t_sig) ** 2) * np.sin(2.0 * np.pi * frequency * t)
-    result = np.sin(2.0 * np.pi * frequency * t)
+def mgpulse(t, t_sig, frequency, t0=0.0):
+    result = np.exp(-0.5 * ((t - t0) / t_sig) ** 2) * np.sin(
+        2.0 * np.pi * frequency * (t - t0)
+    )
     return result
 
 
@@ -26,18 +27,22 @@ def sinusoid(frequency, t, x, eps_r=1.0, mu_r=1.0):
 
 
 def Ez_pw(frequency, x, t, eps_r, mu_r=1.0, E0=1.0):
-    # v_phase = materials_to_phase_velocity(eps_r * epsilon_0, mu_0 * mu_r)
-    # coord = t - x / v_phase
-    # return E0 * mgpulse(coord, 1 / frequency, frequency)
+    v_phase = materials_to_phase_velocity(eps_r * epsilon_0, mu_0 * mu_r)
+    coord = t - x / v_phase
+    t_sig = 3.0 / frequency
+    t0 = 4.0 * t_sig
     return E0 * sinusoid(frequency, t, x)
+    return E0 * mgpulse(coord, t_sig, frequency, t0)
 
 
 def Hy_pw(frequency, x, t, eps_r, mu_r=1.0, E0=1.0):
-    # v_phase = materials_to_phase_velocity(eps_r * epsilon_0, mu_0 * mu_r)
-    # coord = t - x / v_phase
+    v_phase = materials_to_phase_velocity(eps_r * epsilon_0, mu_0 * mu_r)
+    coord = t - x / v_phase
+    t_sig = 3.0 / frequency
+    t0 = 4.0 * t_sig
     eta = np.sqrt(mu_r * mu_0 / eps_r / epsilon_0)
-    # return -E0 / eta * mgpulse(coord, 1 / frequency, frequency)
     return -E0 / eta * sinusoid(frequency, t, x)
+    return -E0 / eta * mgpulse(coord, t_sig, frequency, t0)
 
 
 class Solver:
@@ -133,32 +138,32 @@ class Solver:
         x_line_Hy = self.x_Hy[0, :]
         y_line_Hy = self.y_Hy[:, 0]
 
-        percent_inset = self.defaults["PML_inset_as_uniform"]
-        x_left = (self.x_max - self.x_min) * percent_inset
-        x_right = (self.x_max - self.x_min) * (1 - percent_inset)
-        y_bot = (self.y_max - self.y_min) * percent_inset
-        y_top = (self.y_max - self.y_min) * (1 - percent_inset)
+        self.percent_inset_PML = self.defaults["PML_inset_as_uniform"]
+        self.x_left = (self.x_max - self.x_min) * self.percent_inset_PML
+        self.x_right = (self.x_max - self.x_min) * (1 - self.percent_inset_PML)
+        self.y_bot = (self.y_max - self.y_min) * self.percent_inset_PML
+        self.y_top = (self.y_max - self.y_min) * (1 - self.percent_inset_PML)
 
         # calculate sigma curves for each side
         sigma_max = self.defaults["sigma_max"]
         falloff_exponent = self.defaults["sigma_falloff_exponent"]
         # x left
         if self.defaults["left_boundary"] == "PML":
-            x_line_left_Ez = x_line_Ez[x_line_Ez < x_left]
+            x_line_left_Ez = x_line_Ez[x_line_Ez < self.x_left]
             x_line_left_Ez = (x_line_left_Ez - np.min(x_line_left_Ez)) / (
                 np.max(x_line_left_Ez) - np.min(x_line_left_Ez)
             )
             x_line_left_Ez = x_line_left_Ez[::-1]
             x_line_left_Ez = x_line_left_Ez**falloff_exponent
             x_line_left_Ez *= sigma_max
-            x_line_left_Hx = x_line_Hx[x_line_Hx < x_left]
+            x_line_left_Hx = x_line_Hx[x_line_Hx < self.x_left]
             x_line_left_Hx = (x_line_left_Hx - np.min(x_line_left_Hx)) / (
                 np.max(x_line_left_Hx) - np.min(x_line_left_Hx)
             )
             x_line_left_Hx = x_line_left_Hx[::-1]
             x_line_left_Hx = x_line_left_Hx**falloff_exponent
             x_line_left_Hx *= sigma_max
-            x_line_left_Hy = x_line_Hy[x_line_Hy < x_left]
+            x_line_left_Hy = x_line_Hy[x_line_Hy < self.x_left]
             x_line_left_Hy = (x_line_left_Hy - np.min(x_line_left_Hy)) / (
                 np.max(x_line_left_Hy) - np.min(x_line_left_Hy)
             )
@@ -166,11 +171,11 @@ class Solver:
             x_line_left_Hy = x_line_left_Hy**falloff_exponent
             x_line_left_Hy *= sigma_max
             for i in range(self.sigma_x_Ez.shape[0]):
-                self.sigma_x_Ez[i, :][x_line_Ez < x_left] = x_line_left_Ez
+                self.sigma_x_Ez[i, :][x_line_Ez < self.x_left] = x_line_left_Ez
             for i in range(self.sigma_x_Hx.shape[0]):
-                self.sigma_x_Hx[i, :][x_line_Hx < x_left] = x_line_left_Hx
+                self.sigma_x_Hx[i, :][x_line_Hx < self.x_left] = x_line_left_Hx
             for i in range(self.sigma_x_Hy.shape[0]):
-                self.sigma_x_Hy[i, :][x_line_Hy < x_left] = x_line_left_Hy
+                self.sigma_x_Hy[i, :][x_line_Hy < self.x_left] = x_line_left_Hy
         elif self.defaults["left_boundary"] == "PEC":
             pass
         else:
@@ -178,30 +183,30 @@ class Solver:
 
         # x right
         if self.defaults["right_boundary"] == "PML":
-            x_line_right_Ez = x_line_Ez[x_line_Ez > x_right]
+            x_line_right_Ez = x_line_Ez[x_line_Ez > self.x_right]
             x_line_right_Ez = (x_line_right_Ez - np.min(x_line_right_Ez)) / (
                 np.max(x_line_right_Ez) - np.min(x_line_right_Ez)
             )
             x_line_right_Ez = x_line_right_Ez**falloff_exponent
             x_line_right_Ez *= sigma_max
-            x_line_right_Hx = x_line_Hx[x_line_Hx > x_right]
+            x_line_right_Hx = x_line_Hx[x_line_Hx > self.x_right]
             x_line_right_Hx = (x_line_right_Hx - np.min(x_line_right_Hx)) / (
                 np.max(x_line_right_Hx) - np.min(x_line_right_Hx)
             )
             x_line_right_Hx = x_line_right_Hx**falloff_exponent
             x_line_right_Hx *= sigma_max
-            x_line_right_Hy = x_line_Hy[x_line_Hy > x_right]
+            x_line_right_Hy = x_line_Hy[x_line_Hy > self.x_right]
             x_line_right_Hy = (x_line_right_Hy - np.min(x_line_right_Hy)) / (
                 np.max(x_line_right_Hy) - np.min(x_line_right_Hy)
             )
             x_line_right_Hy = x_line_right_Hy**falloff_exponent
             x_line_right_Hy *= sigma_max
             for i in range(self.sigma_x_Ez.shape[0]):
-                self.sigma_x_Ez[i, :][x_line_Ez > x_right] = x_line_right_Ez
+                self.sigma_x_Ez[i, :][x_line_Ez > self.x_right] = x_line_right_Ez
             for i in range(self.sigma_x_Hx.shape[0]):
-                self.sigma_x_Hx[i, :][x_line_Hx > x_right] = x_line_right_Hx
+                self.sigma_x_Hx[i, :][x_line_Hx > self.x_right] = x_line_right_Hx
             for i in range(self.sigma_x_Hy.shape[0]):
-                self.sigma_x_Hy[i, :][x_line_Hy > x_right] = x_line_right_Hy
+                self.sigma_x_Hy[i, :][x_line_Hy > self.x_right] = x_line_right_Hy
         elif self.defaults["right_boundary"] == "PEC":
             pass
         else:
@@ -209,30 +214,30 @@ class Solver:
 
         # y top
         if self.defaults["top_boundary"] == "PML":
-            y_line_top_Ez = y_line_Ez[y_line_Ez > y_top]
+            y_line_top_Ez = y_line_Ez[y_line_Ez > self.y_top]
             y_line_top_Ez = (y_line_top_Ez - np.min(y_line_top_Ez)) / (
                 np.max(y_line_top_Ez) - np.min(y_line_top_Ez)
             )
             y_line_top_Ez = y_line_top_Ez**falloff_exponent
             y_line_top_Ez *= sigma_max
-            y_line_top_Hx = y_line_Hx[y_line_Hx > y_top]
+            y_line_top_Hx = y_line_Hx[y_line_Hx > self.y_top]
             y_line_top_Hx = (y_line_top_Hx - np.min(y_line_top_Hx)) / (
                 np.max(y_line_top_Hx) - np.min(y_line_top_Hx)
             )
             y_line_top_Hx = y_line_top_Hx**falloff_exponent
             y_line_top_Hx *= sigma_max
-            y_line_top_Hy = y_line_Hy[y_line_Hy > y_top]
+            y_line_top_Hy = y_line_Hy[y_line_Hy > self.y_top]
             y_line_top_Hy = (y_line_top_Hy - np.min(y_line_top_Hy)) / (
                 np.max(y_line_top_Hy) - np.min(y_line_top_Hy)
             )
             y_line_top_Hy = y_line_top_Hy**falloff_exponent
             y_line_top_Hy *= sigma_max
             for i in range(self.sigma_x_Ez.shape[1]):
-                self.sigma_y_Ez[:, i][y_line_Ez > y_top] = y_line_top_Ez
+                self.sigma_y_Ez[:, i][y_line_Ez > self.y_top] = y_line_top_Ez
             for i in range(self.sigma_x_Hx.shape[1]):
-                self.sigma_y_Hx[:, i][y_line_Hx > y_top] = y_line_top_Hx
+                self.sigma_y_Hx[:, i][y_line_Hx > self.y_top] = y_line_top_Hx
             for i in range(self.sigma_x_Hy.shape[1]):
-                self.sigma_y_Hy[:, i][y_line_Hy > y_top] = y_line_top_Hy
+                self.sigma_y_Hy[:, i][y_line_Hy > self.y_top] = y_line_top_Hy
         elif self.defaults["top_boundary"] == "PEC":
             pass
         else:
@@ -240,21 +245,21 @@ class Solver:
 
         # y bot
         if self.defaults["bot_boundary"] == "PML":
-            y_line_bot_Ez = y_line_Ez[y_line_Ez < y_bot]
+            y_line_bot_Ez = y_line_Ez[y_line_Ez < self.y_bot]
             y_line_bot_Ez = (y_line_bot_Ez - np.min(y_line_bot_Ez)) / (
                 np.max(y_line_bot_Ez) - np.min(y_line_bot_Ez)
             )
             y_line_bot_Ez = y_line_bot_Ez[::-1]
             y_line_bot_Ez = y_line_bot_Ez**falloff_exponent
             y_line_bot_Ez *= sigma_max
-            y_line_bot_Hx = y_line_Hx[y_line_Hx < y_bot]
+            y_line_bot_Hx = y_line_Hx[y_line_Hx < self.y_bot]
             y_line_bot_Hx = (y_line_bot_Hx - np.min(y_line_bot_Hx)) / (
                 np.max(y_line_bot_Hx) - np.min(y_line_bot_Hx)
             )
             y_line_bot_Hx = y_line_bot_Hx[::-1]
             y_line_bot_Hx = y_line_bot_Hx**falloff_exponent
             y_line_bot_Hx *= sigma_max
-            y_line_bot_Hy = y_line_Hy[y_line_Hy < y_bot]
+            y_line_bot_Hy = y_line_Hy[y_line_Hy < self.y_bot]
             y_line_bot_Hy = (y_line_bot_Hy - np.min(y_line_bot_Hy)) / (
                 np.max(y_line_bot_Hy) - np.min(y_line_bot_Hy)
             )
@@ -262,11 +267,11 @@ class Solver:
             y_line_bot_Hy = y_line_bot_Hy**falloff_exponent
             y_line_bot_Hy *= sigma_max
             for i in range(self.sigma_x_Ez.shape[1]):
-                self.sigma_y_Ez[:, i][y_line_Ez < y_bot] = y_line_bot_Ez
+                self.sigma_y_Ez[:, i][y_line_Ez < self.y_bot] = y_line_bot_Ez
             for i in range(self.sigma_x_Hx.shape[1]):
-                self.sigma_y_Hx[:, i][y_line_Hx < y_bot] = y_line_bot_Hx
+                self.sigma_y_Hx[:, i][y_line_Hx < self.y_bot] = y_line_bot_Hx
             for i in range(self.sigma_x_Hy.shape[1]):
-                self.sigma_y_Hy[:, i][y_line_Hy < y_bot] = y_line_bot_Hy
+                self.sigma_y_Hy[:, i][y_line_Hy < self.y_bot] = y_line_bot_Hy
         elif self.defaults["bot_boundary"] == "PEC":
             pass
         else:
@@ -372,7 +377,7 @@ class Solver:
         # Insert current source
         # self.Jz[self.yidx_Jz, self.xidx_Jz] = self.Jz_xidx_yidx[time_index]
 
-        box_size = self.defaults["PML_inset_as_uniform"]
+        box_size = self.defaults["PML_inset_as_uniform"] + 0.05
         x_left = self.x_min + (self.x_max - self.x_min) * box_size
         x_right = self.x_min + (self.x_max - self.x_min) * (1.0 - box_size)
         y_bot = self.y_min + (self.y_max - self.y_min) * box_size
