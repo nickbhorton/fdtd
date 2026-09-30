@@ -140,12 +140,14 @@ class App:
         data_dict = {
             "x_Ez": self.solver.x_Ez,
             "y_Ez": self.solver.y_Ez,
+            "x_Hx": self.solver.x_Hx,
+            "y_Hx": self.solver.y_Hx,
+            "x_Hy": self.solver.x_Hy,
+            "y_Hy": self.solver.y_Hy,
             "t": self.solver.t,
             "Ez": self.solver.time_series_array[0].data,
-            "x_left": self.solver.x_left,
-            "x_right": self.solver.x_right,
-            "y_top": self.solver.y_top,
-            "y_bot": self.solver.y_bot,
+            "Hx": self.solver.time_series_array[1].data,
+            "Hy": self.solver.time_series_array[2].data,
         }
 
         try:
