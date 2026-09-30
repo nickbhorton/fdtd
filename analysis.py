@@ -3,13 +3,13 @@ from itertools import pairwise
 import matplotlib.pyplot as plt
 import numpy as np
 
-data = np.load("data/pec_40_40_4k.npz")
+data = np.load("data/pec_15_15_4k.npz")
 x = data["x_Ez"]
 y = data["y_Ez"]
 t = data["t"]
 Ez = data["Ez"]
 
-ri = 100
+ri = 30
 ri2 = x.shape[0] - ri
 ys = [ri, ri2, ri2, ri, ri]
 xs = [ri, ri, ri2, ri2, ri]
@@ -46,7 +46,7 @@ for xi, yi in zip(xs, ys):
     Ez_circle.append(Ez[:, yi, xi])
 Ez_circle = np.array(Ez_circle)  # angle, time
 
-ti = 700
+ti = 400
 fig, ax = plt.subplots(1, 2)
 mesh = ax[0].pcolormesh(x, y, Ez[ti, :, :], cmap="bwr")
 ax[0].scatter(x_circle1, y_circle1, 2, c=np.arange(len(x_circle1)), cmap="jet")
