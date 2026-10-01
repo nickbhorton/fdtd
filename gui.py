@@ -5,7 +5,7 @@ import dearpygui.dearpygui as dpg
 import numpy as np
 
 from lib import format_bytes
-from solver import Solver
+from solver_TM import Solver
 
 
 class App:
