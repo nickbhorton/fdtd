@@ -23,7 +23,7 @@ class App:
             width=600,
             height=400,
             default_filename="my_array.npz",
-        ):
+        ):  # type: ignore
             # Restrict the user to saving as .npz files
             dpg.add_file_extension(
                 ".npz", color=(0, 255, 0, 255), custom_text="[NumPy Zip]"
@@ -218,6 +218,7 @@ class App:
         self.update_image(None, dpg.get_value("time_series_slider"))
 
     def update_delta_x(self, sender, delta_x):
+        print(self.solver.wavelength / delta_x)
         self.solver.set_delta_x(self.solver.wavelength / delta_x)
         self.update_memory_size(None, self.solver.get_solution_memory_size())
 
