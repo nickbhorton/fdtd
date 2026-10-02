@@ -5,7 +5,7 @@ import dearpygui.dearpygui as dpg
 import numpy as np
 
 from lib import format_bytes
-from solver_TM import Solver
+from solver import Solver
 
 
 class App:
@@ -145,9 +145,9 @@ class App:
             "x_Hy": self.solver.x_Hy,
             "y_Hy": self.solver.y_Hy,
             "t": self.solver.t,
-            "Ez": self.solver.time_series_array[0].data,
-            "Hx": self.solver.time_series_array[1].data,
-            "Hy": self.solver.time_series_array[2].data,
+            "Ez": self.solver.Ez_to_save,
+            "Hx": self.solver.Hx_to_save,
+            "Hy": self.solver.Hy_to_save,
         }
 
         try:

@@ -1,10 +1,8 @@
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
 from scipy.constants import epsilon_0, mu_0
 from scipy.special import hankel2, jn
-import matplotlib
-import numpy as np
-import matplotlib.pyplot as plt
-
-matplotlib.use("QtAgg")
 
 plt.rcParams.update(
     {
@@ -38,7 +36,7 @@ y = np.linspace(
 x, y = np.meshgrid(x, y)
 rho = np.sqrt(x**2 + y**2)
 phi = np.atan2(y, x)
-phi_lin = np.linspace(0, 2.0 * np.pi, 500)
+phi_lin = np.linspace(0, 2.0 * np.pi, 1000)
 
 E0 = 1.0
 
@@ -75,8 +73,14 @@ ax = [
 mesh_00 = ax[0][0].pcolormesh(x, y, np.real(Ez_i), cmap="bwr")
 mesh_01 = ax[0][1].pcolormesh(x, y, np.real(Ez_s), cmap="bwr")
 mesh_10 = ax[1][0].pcolormesh(x, y, np.real(Ez_t), cmap="bwr")
-ax[1][1].plot(phi_lin, np.log10(sig / a))
+ax[1][1].plot(phi_lin, np.log10((sig / (4.0 * wavelength / 2))))
 fig.colorbar(mesh_00)
 fig.colorbar(mesh_01)
 fig.colorbar(mesh_10)
+
+np.savez(
+    "compare.npz",
+    **{"phi": phi_lin, "result": np.log10((sig / (4.0 * wavelength / 2)))},
+)
+
 plt.show()

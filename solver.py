@@ -20,12 +20,6 @@ def mgpulse(t, t_sig, frequency, t0=0.0):
     return result
 
 
-# def sinusoid(frequency, t, x, eps_r=1.0, mu_r=1.0):
-#     w = 2.0 * np.pi * frequency
-#     k = w * np.sqrt(epsilon_0 * eps_r * mu_0 * mu_r)
-#     return np.sin(w * t - k * x)
-
-
 def sinusoid(frequency, t, x, eps_r=1.0, mu_r=1.0):
     w = 2.0 * np.pi * frequency
     k = w * np.sqrt(epsilon_0 * eps_r * mu_0 * mu_r)
@@ -39,7 +33,7 @@ def Ez_pw(frequency, x, t, eps_r, mu_r=1.0, E0=1.0):
     coord = t - x / v_phase
     t_sig = 3.0 / frequency
     t0 = 4.0 * t_sig
-    return E0 * sinusoid(frequency, t, x)
+    # return E0 * sinusoid(frequency, t, x)
     return E0 * mgpulse(coord, t_sig, frequency, t0)
 
 
@@ -49,7 +43,7 @@ def Hy_pw(frequency, x, t, eps_r, mu_r=1.0, E0=1.0):
     t_sig = 3.0 / frequency
     t0 = 4.0 * t_sig
     eta = np.sqrt(mu_r * mu_0 / eps_r / epsilon_0)
-    return -E0 / eta * sinusoid(frequency, t, x)
+    # return -E0 / eta * sinusoid(frequency, t, x)
     return -E0 / eta * mgpulse(coord, t_sig, frequency, t0)
 
 
@@ -562,7 +556,6 @@ class Solver:
         self.Hx_to_save[time_index] = self.Hx
         self.Hy_to_save[time_index] = self.Hy
 
-    # THIS WILL DELETE self.[Ez,Hx,Hy]_to_save
     def convert_to_save_data_to_time_series(self):
         self.time_series_array = []
         self.time_series_array.append(
@@ -575,7 +568,7 @@ class Solver:
                 ),
             )
         )
-        del self.Ez_to_save
+        # del self.Ez_to_save
         self.time_series_array.append(
             TimeSeries(
                 self.Hx_to_save,
@@ -586,7 +579,7 @@ class Solver:
                 ),
             )
         )
-        del self.Hx_to_save
+        # del self.Hx_to_save
         self.time_series_array.append(
             TimeSeries(
                 self.Hy_to_save,
@@ -597,4 +590,4 @@ class Solver:
                 ),
             )
         )
-        del self.Hy_to_save
+        # del self.Hy_to_save
