@@ -12,6 +12,8 @@ from lib import (
 )
 from timeseries import TimeSeries
 
+pulse = True
+
 
 def mgpulse(t, t_sig, frequency, t0=0.0):
     result = np.exp(-0.5 * ((t - t0) / t_sig) ** 2) * np.sin(
@@ -33,8 +35,9 @@ def Ez_pw(frequency, x, t, eps_r, mu_r=1.0, E0=1.0):
     coord = t - x / v_phase
     t_sig = 3.0 / frequency
     t0 = 4.0 * t_sig
-    # return E0 * sinusoid(frequency, t, x)
-    return E0 * mgpulse(coord, t_sig, frequency, t0)
+    if pulse:
+        return E0 * mgpulse(coord, t_sig, frequency, t0)
+    return E0 * sinusoid(frequency, t, x)
 
 
 def Hy_pw(frequency, x, t, eps_r, mu_r=1.0, E0=1.0):
@@ -43,8 +46,9 @@ def Hy_pw(frequency, x, t, eps_r, mu_r=1.0, E0=1.0):
     t_sig = 3.0 / frequency
     t0 = 4.0 * t_sig
     eta = np.sqrt(mu_r * mu_0 / eps_r / epsilon_0)
-    # return -E0 / eta * sinusoid(frequency, t, x)
-    return -E0 / eta * mgpulse(coord, t_sig, frequency, t0)
+    if pulse:
+        return -E0 / eta * mgpulse(coord, t_sig, frequency, t0)
+    return -E0 / eta * sinusoid(frequency, t, x)
 
 
 class Solver:

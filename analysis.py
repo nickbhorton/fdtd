@@ -7,6 +7,22 @@ import numpy as np
 from scipy.constants import epsilon_0, mu_0
 
 
+plt.rcParams.update(
+    {
+        "axes.grid": False,
+        "axes.edgecolor": "black",
+        "xtick.major.size": 0,
+        "ytick.major.size": 0,
+        "font.size": 12,
+        "text.color": "black",
+        "axes.labelcolor": "black",
+        "axes.labelsize": 14,
+        "legend.frameon": False,
+        "lines.linewidth": 2.5,
+    }
+)
+
+
 def cartesian_vector_to_spherical(vector_cartesian, theta, phi):
     # From Gemini because I am lazy and didn't want to get this wrong
     vector_cartesian = np.asarray(vector_cartesian)
@@ -109,7 +125,7 @@ def fourier_transform_amplitude(field, target_frequency, t):
     ) * (t[1] - t[0])
 
 
-data = np.load("data/TMz_PEC_25_25_4k_GP.npz")
+data = np.load("data/bist_tmz_pec_fields_40_40_2p6k.npz")
 t_E = data["t"]
 dt = t_E[1] - t_E[0]
 t_H = data["t"] - dt / 2
@@ -369,14 +385,32 @@ sigma_2d = (
     (k0 / 4) * np.abs(L_spherical[2] + Z0 * N_spherical[1]) ** 2 / np.abs(E_inc) ** 2
 )
 
-compare_data = np.load("compare.npz")
+compare_data = np.load("tmz_pec_compare.npz")
 phi_compare = compare_data["phi"]
 result_compare = compare_data["result"]
 
-fig, ax = plt.subplots(subplot_kw={"projection": "polar"})
-# ax.plot(phi, np.abs(E_theta), linewidth=2)
-ax.plot(phi_compare, result_compare, linewidth=2, color="black", alpha=0.5)
-ax.plot(phi, np.log10(sigma_2d / (4.0 * wavelength / 2)), linewidth=2, color="red", alpha=0.5)
+fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, layout="constrained", figsize=(8,8))
+ax.set_rticks([-25, -15])
+ax.set_rlabel_position(90)
+ax.set_xlabel(r"$\phi$")
+ax.plot(
+    phi_compare,
+    20.0 * np.log10(result_compare),
+    linewidth=2,
+    color="black",
+    alpha=0.5,
+    label=r"$dB(\sigma_{\text{2D}}^{\text{\Sigma}})$",
+)
+ax.plot(
+    phi,
+    20.0 * np.log10(sigma_2d),
+    linewidth=2,
+    color="red",
+    alpha=0.5,
+    label=r"$dB(\sigma_{\text{2D}}^{FDTD})$",
+)
+ax.legend()
+fig.savefig("plots/bist_pec_tmz.png", dpi=200)
 
 
 plt.show()
