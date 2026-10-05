@@ -12,7 +12,8 @@ from lib import (
 )
 from timeseries import TimeSeries
 
-pulse = False
+pulse = True
+pulse_t_sig = 0.5
 
 
 def mgpulse(t, t_sig, frequency, t0=0.0):
@@ -33,7 +34,7 @@ def sinusoid(frequency, t, x, eps_r=1.0, mu_r=1.0):
 def Ez_pw(frequency, x, t, eps_r, mu_r=1.0, E0=1.0):
     v_phase = materials_to_phase_velocity(eps_r * epsilon_0, mu_0 * mu_r)
     coord = t - x / v_phase
-    t_sig = 3.0 / frequency
+    t_sig = pulse_t_sig / frequency
     t0 = 4.0 * t_sig
     if pulse:
         return E0 * mgpulse(coord, t_sig, frequency, t0)
@@ -43,7 +44,7 @@ def Ez_pw(frequency, x, t, eps_r, mu_r=1.0, E0=1.0):
 def Hy_pw(frequency, x, t, eps_r, mu_r=1.0, E0=1.0):
     v_phase = materials_to_phase_velocity(eps_r * epsilon_0, mu_0 * mu_r)
     coord = t - x / v_phase
-    t_sig = 3.0 / frequency
+    t_sig = pulse_t_sig / frequency
     t0 = 4.0 * t_sig
     eta = np.sqrt(mu_r * mu_0 / eps_r / epsilon_0)
     if pulse:

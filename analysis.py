@@ -437,15 +437,27 @@ def mono_echo_width(data_path):
     return target_frequency, sigma_monostatic
 
 
-fs, sig_m = mono_echo_width("data/gp_pec_tmz_40_40_3k_0p96.npz")
-compare_data = np.load("tmz_pec_monostatic.npz")
-fs_compare = compare_data["frequency"]
-sig_m_compare = compare_data["sigma_monostatic"]
-fig, ax = plt.subplots(layout="constrained")
-ax.plot(fs * 1e-9, 20.0 * np.log10(np.abs(sig_m)), label="simulated", color="black")
-ax.plot(fs_compare * 1e-9, 20.0 * np.log10(sig_m_compare), label="analytical", color="black", ls="--")
-ax.set_xlabel("Frequency (GHz)")
-ax.set_ylabel("Monostatic Echo Width (dB)")
+phi, sigma_2d = bistatic_echo_width("data/gp_die_tmz_60_60_2k.npz", 0.5 / 10e9)
+compare_data = np.load("die_tmz_compare.npz")
+phi_c, sigma_2d_c = compare_data["phi"], compare_data["result"]
+
+fig, ax = plt.subplots(subplot_kw={"projection": "polar"})
+ax.plot(phi, 10.0 * np.log10(sigma_2d), color="black", linewidth=2, label="Simulation")
+ax.plot(phi_c, 10.0 * np.log10(sigma_2d_c), color="black", linewidth=2, ls='--', label="Analytical")
 ax.legend()
-fig.savefig("pec_tmz_mono.png", dpi=200)
+fig.savefig("bist_die_tmz.png", dpi=200)
 plt.show()
+
+# monostatic
+# fs, sig_m = mono_echo_width("data/gp_pec_tmz_40_40_3k_0p96.npz")
+# compare_data = np.load("tmz_pec_monostatic.npz")
+# fs_compare = compare_data["frequency"]
+# sig_m_compare = compare_data["sigma_monostatic"]
+# fig, ax = plt.subplots(layout="constrained")
+# ax.plot(fs * 1e-9, 20.0 * np.log10(np.abs(sig_m)), label="simulated", color="black")
+# ax.plot(fs_compare * 1e-9, 20.0 * np.log10(sig_m_compare), label="analytical", color="black", ls="--")
+# ax.set_xlabel("Frequency (GHz)")
+# ax.set_ylabel("Monostatic Echo Width (dB)")
+# ax.legend()
+# fig.savefig("pec_tmz_mono.png", dpi=200)
+# plt.show()

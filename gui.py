@@ -3,9 +3,9 @@ from pathlib import Path
 
 import dearpygui.dearpygui as dpg
 import numpy as np
+from solver_tez import Solver
 
 from lib import format_bytes
-from solver import Solver
 
 
 class App:

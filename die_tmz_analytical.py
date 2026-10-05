@@ -86,10 +86,10 @@ Ez_s[rho <= a] = Ez_t[rho <= a] - Ez_i[rho <= a]
 
 fig, ax = plt.subplots(1, 2, figsize=(8, 4), layout="constrained")
 mesh_0 = ax[0].pcolormesh(
-    x / wavelength, y / wavelength, np.real(Ez_s), cmap="bwr", vmin=-1.0, vmax=1.0
+    x / wavelength, y / wavelength, np.real(Ez_s), cmap="bwr", vmin=-2.0, vmax=2.0
 )
 mesh_1 = ax[1].pcolormesh(
-    x / wavelength, y / wavelength, np.real(Ez_t), cmap="bwr", vmin=-1.0, vmax=1.0
+    x / wavelength, y / wavelength, np.real(Ez_t), cmap="bwr", vmin=-2.0, vmax=2.0
 )
 
 ax[0].set_xticks([-2, 0, 2])
