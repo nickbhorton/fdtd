@@ -3,7 +3,7 @@
     "background_epsilon_r": 1.0,
     "background_mu_r": 1.0,
     "background_sigma": 0.0,
-    "picoseconds": 4000.0,
+    "picoseconds": 3000.0,
     "wavelengths_in_x": 6,
     "wavelengths_in_y": 6,
     "wavelength_discretization_x": 25,
@@ -20,7 +20,7 @@
         [
             0.5,
             0.5,
-            0.0,
+            0.0833333333333333,
             9.0
         ]
     ],
@@ -28,7 +28,7 @@
         [
             0.5,
             0.5,
-            0.0833333333333333
+            0.0
         ]
     ]
 }

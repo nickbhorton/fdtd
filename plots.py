@@ -30,7 +30,7 @@ def field_plot(data, index, field_fun, field_str, surf_offset, suptitle, savefig
 
     # fig, ax = plt.subplots()
     # ax.scatter(
-    #     np.arange(len(t)), [Ez_pw(10e9, x_Ez[0, 0], ti, 1.0) for ti in t]
+    #     np.arange(len(t)), [Ez_pw(10e9, x[0, 0], ti, 1.0) for ti in t]
     # )
 
     percent_inset_PML = 0.1666666666666666
@@ -127,16 +127,40 @@ def field_plot(data, index, field_fun, field_str, surf_offset, suptitle, savefig
     fig1.savefig(savefig_title, dpi=200)
 
 
-data = [np.load("data/plots_tmz_pec_fields_40_40_1k.npz")]
+# PEC TMz
+# data = [np.load("data/plots_tmz_pec_fields_40_40_1k.npz")]
 
-index = [410, 410, 410]
+# index = [410, 410, 410]
+# funs = [Ez_pw, lambda x1, x2, x3, x4: np.zeros_like(x2), Hy_pw]
+# field_str = ["Ez", "Hx", "Hy"]
+# suptitles = [r"$E_z^{\text{TM}_z}$", r"$H_x^{\text{TM}_z}$", r"$H_y^{\text{TM}_z}$"]
+# savefigs = [
+#     "plots/sim_pec_tmz_Ez_fields.png",
+#     "plots/sim_pec_tmz_Hx_fields.png",
+#     "plots/sim_pec_tmz_Hy_fields.png",
+# ]
+
+# for i in range(len(index)):
+#     field_plot(
+#         data[floor(i / 3)],
+#         index[i],
+#         funs[i],
+#         field_str[i],
+#         0.2,
+#         suptitles[i],
+#         savefigs[i],
+#     )
+
+data = [np.load("data/sin_die_tmz_40_40_2k.npz")]
+
+index = [1075, 1075, 1075]
 funs = [Ez_pw, lambda x1, x2, x3, x4: np.zeros_like(x2), Hy_pw]
 field_str = ["Ez", "Hx", "Hy"]
 suptitles = [r"$E_z^{\text{TM}_z}$", r"$H_x^{\text{TM}_z}$", r"$H_y^{\text{TM}_z}$"]
 savefigs = [
-    "plots/sim_pec_tmz_Ez_fields.png",
-    "plots/sim_pec_tmz_Hx_fields.png",
-    "plots/sim_pec_tmz_Hy_fields.png",
+    "plots/sim_die_tmz_Ez_fields.png",
+    "plots/sim_die_tmz_Hx_fields.png",
+    "plots/sim_die_tmz_Hy_fields.png",
 ]
 
 for i in range(len(index)):
@@ -149,4 +173,4 @@ for i in range(len(index)):
         suptitles[i],
         savefigs[i],
     )
-# plt.show()
+plt.show()

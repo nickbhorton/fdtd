@@ -12,7 +12,7 @@ from lib import (
 )
 from timeseries import TimeSeries
 
-pulse = True
+pulse = False
 
 
 def mgpulse(t, t_sig, frequency, t0=0.0):

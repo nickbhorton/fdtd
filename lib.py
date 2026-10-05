@@ -45,5 +45,5 @@ def materials_to_phase_velocity(epsilon, mu):
 
 def stability_condition_2d(phase_velocity, delta_x, delta_y):
     dt = 1 / (phase_velocity * np.sqrt(1 / delta_x**2 + 1 / delta_y**2))
-    cond_multiplier = 0.4
+    cond_multiplier = 0.96
     return cond_multiplier * dt

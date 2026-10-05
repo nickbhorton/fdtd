@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.constants import epsilon_0, mu_0
 
-
 plt.rcParams.update(
     {
         "axes.grid": False,
@@ -374,7 +373,7 @@ def mono_echo_width(data_path):
     dx = x_Ez[0, 1] - x_Ez[0, 0]
     dy = y_Ez[1, 0] - y_Ez[0, 0]
     center_frequency = 10e9
-    target_frequency = np.linspace(9e9, 11e9, 10)
+    target_frequency = np.linspace(9e9, 11e9, 30)
     sigma_monostatic = np.zeros_like(target_frequency, dtype=np.complex128)
 
     for i in range(len(target_frequency)):
@@ -438,15 +437,15 @@ def mono_echo_width(data_path):
     return target_frequency, sigma_monostatic
 
 
-# compare_data = np.load("tmz_pec_compare.npz")
-# phi_compare = compare_data["phi"]
-# result_compare = compare_data["result"]
-
-fs, sig_monostatic = mono_echo_width("data/bist_tmz_pec_fields_40_40_2p6k.npz")
+fs, sig_m = mono_echo_width("data/gp_pec_tmz_40_40_3k_0p96.npz")
 compare_data = np.load("tmz_pec_monostatic.npz")
-fs2 = compare_data["frequency"]
-sig_monostatic2 = compare_data["sigma_monostatic"]
-fig, ax = plt.subplots()
-ax.scatter(fs, np.abs(sig_monostatic))
-ax.plot(fs2, sig_monostatic2)
+fs_compare = compare_data["frequency"]
+sig_m_compare = compare_data["sigma_monostatic"]
+fig, ax = plt.subplots(layout="constrained")
+ax.plot(fs * 1e-9, 20.0 * np.log10(np.abs(sig_m)), label="simulated", color="black")
+ax.plot(fs_compare * 1e-9, 20.0 * np.log10(sig_m_compare), label="analytical", color="black", ls="--")
+ax.set_xlabel("Frequency (GHz)")
+ax.set_ylabel("Monostatic Echo Width (dB)")
+ax.legend()
+fig.savefig("pec_tmz_mono.png", dpi=200)
 plt.show()
