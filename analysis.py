@@ -23,6 +23,11 @@ plt.rcParams.update(
 )
 
 
+def mgpulse_ft(f, t_sig, frequency, t0=0.0):
+    G = lambda ff: t_sig * np.sqrt(2 * np.pi) * np.exp(-2.0 * (np.pi * t_sig * ff) ** 2)
+    return np.exp(-2j * np.pi * f * t0) * (G(f - frequency) - G(f + frequency)) / 2j
+
+
 def cartesian_vector_to_spherical(vector_cartesian, theta, phi):
     # From Gemini because I am lazy and didn't want to get this wrong
     vector_cartesian = np.asarray(vector_cartesian)
@@ -125,292 +130,323 @@ def fourier_transform_amplitude(field, target_frequency, t):
     ) * (t[1] - t[0])
 
 
-data = np.load("data/bist_tmz_pec_fields_40_40_2p6k.npz")
-t_E = data["t"]
-dt = t_E[1] - t_E[0]
-t_H = data["t"] - dt / 2
-x_Ez = data["x_Ez"]
-y_Ez = data["y_Ez"]
-x_Hx = data["x_Hx"]
-y_Hx = data["y_Hx"]
-x_Hy = data["x_Hy"]
-y_Hy = data["y_Hy"]
-Ez = data["Ez"]
-Hx = data["Hx"]
-Hy = data["Hy"]
+def bistatic_echo_width(data_path, t_sig):
+    data = np.load(data_path)
+    t_E = data["t"]
+    dt = t_E[1] - t_E[0]
+    t_H = data["t"] - dt / 2
+    x_Ez = data["x_Ez"]
+    y_Ez = data["y_Ez"]
+    x_Hx = data["x_Hx"]
+    y_Hx = data["y_Hx"]
+    x_Hy = data["x_Hy"]
+    y_Hy = data["y_Hy"]
+    Ez = data["Ez"]
+    Hx = data["Hx"]
+    Hy = data["Hy"]
 
+    defaults_path = Path("solver_default.json")
+    defaults = json.loads(defaults_path.read_text())
+    # This is OK because my grid is always exactly square
+    x_line_Ez = x_Ez[0, :]
+    integration_surface_uniform = defaults["PML_inset_as_uniform"] + 0.05
+    x_left = (x_Ez.max() - x_Ez.min()) * integration_surface_uniform
+    x_right = (x_Ez.max() - x_Ez.min()) * (1 - integration_surface_uniform)
+    x_left_i = np.abs(x_line_Ez - x_left).argmin()
+    x_right_i = np.abs(x_line_Ez - x_right).argmin()
 
-defaults_path = Path("solver_default.json")
-defaults = json.loads(defaults_path.read_text())
-# This is OK because my grid is always exactly square
-x_line_Ez = x_Ez[0, :]
-integration_surface_uniform = defaults["PML_inset_as_uniform"] + 0.05
-x_left = (x_Ez.max() - x_Ez.min()) * integration_surface_uniform
-x_right = (x_Ez.max() - x_Ez.min()) * (1 - integration_surface_uniform)
-x_left_i = np.abs(x_line_Ez - x_left).argmin()
-x_right_i = np.abs(x_line_Ez - x_right).argmin()
-
-x_square_1d, y_square_1d, Ez_square, angle_Ez, ns_Ez = get_square(
-    x_Ez, y_Ez, Ez, x_left_i, x_right_i, x_left_i, x_right_i
-)
-
-(
-    x_square_1d_Hx_above,
-    y_square_1d_Hx_above,
-    Hx_square_above,
-    angle_Hx_above,
-    ns_Hx_above,
-) = get_square(x_Hx, y_Hx, Hx, x_left_i, x_right_i, x_left_i, x_right_i)
-(
-    x_square_1d_Hx_below,
-    y_square_1d_Hx_below,
-    Hx_square_below,
-    angle_Hx_below,
-    ns_Hx_below,
-) = get_square(x_Hx, y_Hx, Hx, x_left_i - 1, x_right_i - 1, x_left_i, x_right_i)
-
-x_square_1d_Hx = (x_square_1d_Hx_above + x_square_1d_Hx_below) / 2
-y_square_1d_Hx = (y_square_1d_Hx_above + y_square_1d_Hx_below) / 2
-Hx_square = (Hx_square_above + Hx_square_below) / 2
-angle_Hx = (angle_Hx_above + angle_Hx_below) / 2
-ns_Hx = (ns_Hx_above + ns_Hx_below) / 2
-
-(
-    x_square_1d_Hy_above,
-    y_square_1d_Hy_above,
-    Hy_square_above,
-    angle_Hy_above,
-    ns_Hy_above,
-) = get_square(x_Hy, y_Hy, Hy, x_left_i, x_right_i, x_left_i, x_right_i)
-(
-    x_square_1d_Hy_below,
-    y_square_1d_Hy_below,
-    Hy_square_below,
-    angle_Hy_below,
-    ns_Hy_below,
-) = get_square(x_Hy, y_Hy, Hy, x_left_i, x_right_i, x_left_i - 1, x_right_i - 1)
-
-x_square_1d_Hy = (x_square_1d_Hy_above + x_square_1d_Hy_below) / 2
-y_square_1d_Hy = (y_square_1d_Hy_above + y_square_1d_Hy_below) / 2
-Hy_square = (Hy_square_above + Hy_square_below) / 2
-angle_Hy = (angle_Hy_above + angle_Hy_below) / 2
-ns_Hy = (ns_Hy_above + ns_Hy_below) / 2
-
-# fft amplitudes at target_frequency
-dx = x_Ez[0, 1] - x_Ez[0, 0]
-dy = y_Ez[1, 0] - y_Ez[0, 0]
-target_frequency = 10e9
-
-phase_velocity = 1 / np.sqrt(epsilon_0 * mu_0)
-wavelength = phase_velocity / target_frequency
-
-Ez_at_f = fourier_transform_amplitude(Ez_square, target_frequency, t_E)
-Hx_at_f = fourier_transform_amplitude(Hx_square, target_frequency, t_H)
-Hy_at_f = fourier_transform_amplitude(Hy_square, target_frequency, t_H)
-
-# fig, ax = plt.subplots()
-# ax.scatter(x_square_1d_Ez, y_square_1d_Ez)
-
-E_to_cross = np.zeros((3, len(Ez_square)), dtype=np.complex128)
-H_to_cross = np.zeros((3, len(Hx_square)), dtype=np.complex128)
-
-E_to_cross[2] = Ez_at_f
-H_to_cross[0] = Hx_at_f
-H_to_cross[1] = Hy_at_f
-
-M_eff = -np.cross(ns_Ez, E_to_cross, axisa=0, axisb=0)
-J_eff = np.cross(ns_Hx, H_to_cross, axisa=0, axisb=0)
-
-# fig, ax = plt.subplots(1, 3)
-# marker_size = 50
-# ax[0].scatter(
-#     x_square_1d_Ez, y_square_1d_Ez, marker_size, c=np.abs(M_Ez_eff[:, 0]), cmap="jet"
-# )
-# ax[1].scatter(
-#     x_square_1d_Ez, y_square_1d_Ez, marker_size, c=np.abs(M_Ez_eff[:, 1]), cmap="jet"
-# )
-# ax[2].scatter(
-#     x_square_1d_Ez, y_square_1d_Ez, marker_size, c=np.abs(M_Ez_eff[:, 2]), cmap="jet"
-# )
-# ax[0].scatter(
-#     x_square_1d_Hx,
-#     y_square_1d_Hx,
-#     marker_size,
-#     c=np.abs(J_Hx_eff[:, 0]),
-#     cmap="bwr",
-#     marker="v",
-# )
-# ax[1].scatter(
-#     x_square_1d_Hx,
-#     y_square_1d_Hx,
-#     marker_size,
-#     c=np.abs(J_Hx_eff[:, 1]),
-#     cmap="bwr",
-#     marker="v",
-# )
-# ax[2].scatter(
-#     x_square_1d_Hx,
-#     y_square_1d_Hx,
-#     marker_size,
-#     c=np.abs(J_Hx_eff[:, 2]),
-#     cmap="bwr",
-#     marker="v",
-# )
-# ax[0].scatter(
-#     x_square_1d_Hy,
-#     y_square_1d_Hy,
-#     marker_size,
-#     c=np.abs(J_Hy_eff[:, 0]),
-#     cmap="viridis",
-#     marker="X",
-# )
-# ax[1].scatter(
-#     x_square_1d_Hy,
-#     y_square_1d_Hy,
-#     marker_size,
-#     c=np.abs(J_Hy_eff[:, 1]),
-#     cmap="viridis",
-#     marker="X",
-# )
-# ax[2].scatter(
-#     x_square_1d_Hy,
-#     y_square_1d_Hy,
-#     marker_size,
-#     c=np.abs(J_Hy_eff[:, 2]),
-#     cmap="viridis",
-#     marker="X",
-# )
-
-
-phi = np.linspace(0, 2.0 * np.pi, 1000)
-theta = np.pi / 2
-
-Nz = np.zeros_like(phi, dtype=np.complex128)
-Lx = np.zeros_like(phi, dtype=np.complex128)
-Ly = np.zeros_like(phi, dtype=np.complex128)
-
-k0 = 2.0 * np.pi * target_frequency * np.sqrt(epsilon_0 * mu_0)
-Z0 = np.sqrt(mu_0 / epsilon_0)
-for i, theta_i in enumerate(phi):
-    Nz[i] = np.sum(
-        dx
-        * J_eff[:, 2]
-        * np.exp(
-            1j * k0 * (np.cos(theta_i) * x_square_1d + np.sin(theta_i) * y_square_1d)
-        )
-    )
-    Lx[i] = np.sum(
-        dx
-        * M_eff[:, 0]
-        * np.exp(
-            1j * k0 * (np.cos(theta_i) * x_square_1d + np.sin(theta_i) * y_square_1d)
-        )
-    )
-    Ly[i] = np.sum(
-        dx
-        * M_eff[:, 1]
-        * np.exp(
-            1j * k0 * (np.cos(theta_i) * x_square_1d + np.sin(theta_i) * y_square_1d)
-        )
+    x_square_1d, y_square_1d, Ez_square, angle_Ez, ns_Ez = get_square(
+        x_Ez, y_Ez, Ez, x_left_i, x_right_i, x_left_i, x_right_i
     )
 
-# fig, ax = plt.subplots(1, 3)
-# ax[0].plot(phi, np.real(Nz))
-# ax[0].plot(phi, np.imag(Nz))
-# ax[1].plot(phi, np.real(Lx))
-# ax[1].plot(phi, np.imag(Lx))
-# ax[2].plot(phi, np.real(Ly))
-# ax[2].plot(phi, np.imag(Ly))
+    (
+        x_square_1d_Hx_above,
+        y_square_1d_Hx_above,
+        Hx_square_above,
+        angle_Hx_above,
+        ns_Hx_above,
+    ) = get_square(x_Hx, y_Hx, Hx, x_left_i, x_right_i, x_left_i, x_right_i)
+    (
+        x_square_1d_Hx_below,
+        y_square_1d_Hx_below,
+        Hx_square_below,
+        angle_Hx_below,
+        ns_Hx_below,
+    ) = get_square(x_Hx, y_Hx, Hx, x_left_i - 1, x_right_i - 1, x_left_i, x_right_i)
 
-N = np.zeros((3, len(Nz)), dtype=Nz.dtype)
-N[2, :] = Nz
+    x_square_1d_Hx = (x_square_1d_Hx_above + x_square_1d_Hx_below) / 2
+    y_square_1d_Hx = (y_square_1d_Hx_above + y_square_1d_Hx_below) / 2
+    Hx_square = (Hx_square_above + Hx_square_below) / 2
+    angle_Hx = (angle_Hx_above + angle_Hx_below) / 2
+    ns_Hx = (ns_Hx_above + ns_Hx_below) / 2
 
-L = np.zeros((3, len(Lx)), dtype=Lx.dtype)
-L[0, :] = Lx
-L[1, :] = Ly
+    (
+        x_square_1d_Hy_above,
+        y_square_1d_Hy_above,
+        Hy_square_above,
+        angle_Hy_above,
+        ns_Hy_above,
+    ) = get_square(x_Hy, y_Hy, Hy, x_left_i, x_right_i, x_left_i, x_right_i)
+    (
+        x_square_1d_Hy_below,
+        y_square_1d_Hy_below,
+        Hy_square_below,
+        angle_Hy_below,
+        ns_Hy_below,
+    ) = get_square(x_Hy, y_Hy, Hy, x_left_i, x_right_i, x_left_i - 1, x_right_i - 1)
 
-N_spherical = cartesian_vector_to_spherical(N, theta * np.ones_like(phi), phi)
-L_spherical = cartesian_vector_to_spherical(L, theta * np.ones_like(phi), phi)
+    x_square_1d_Hy = (x_square_1d_Hy_above + x_square_1d_Hy_below) / 2
+    y_square_1d_Hy = (y_square_1d_Hy_above + y_square_1d_Hy_below) / 2
+    Hy_square = (Hy_square_above + Hy_square_below) / 2
+    angle_Hy = (angle_Hy_above + angle_Hy_below) / 2
+    ns_Hy = (ns_Hy_above + ns_Hy_below) / 2
 
-# fig, ax = plt.subplots(2, 3)
-# ax[0][0].plot(phi, np.real(N_spherical[0, :]))
-# ax[0][0].plot(phi, np.imag(N_spherical[0, :]))
-# ax[0][1].plot(phi, np.real(N_spherical[1, :]))
-# ax[0][1].plot(phi, np.imag(N_spherical[1, :]))
-# ax[0][2].plot(phi, np.real(N_spherical[2, :]))
-# ax[0][2].plot(phi, np.imag(N_spherical[2, :]))
+    # fft amplitudes at target_frequency
+    dx = x_Ez[0, 1] - x_Ez[0, 0]
+    dy = y_Ez[1, 0] - y_Ez[0, 0]
+    target_frequency = 10e9
 
-# ax[1][0].plot(phi, np.real(L_spherical[0, :]))
-# ax[1][0].plot(phi, np.imag(L_spherical[0, :]))
-# ax[1][1].plot(phi, np.real(L_spherical[1, :]))
-# ax[1][1].plot(phi, np.imag(L_spherical[1, :]))
-# ax[1][2].plot(phi, np.real(L_spherical[2, :]))
-# ax[1][2].plot(phi, np.imag(L_spherical[2, :]))
+    phase_velocity = 1 / np.sqrt(epsilon_0 * mu_0)
+    wavelength = phase_velocity / target_frequency
 
-r = 1000.0
-E_theta = (
-    -1j
-    * k0
-    * np.exp(-1j * k0 * r)
-    / (4.0 * np.pi * r)
-    * (L_spherical[2, :] + Z0 * N_spherical[1, :])
-)
-E_phi = (
-    1j
-    * k0
-    * np.exp(-1j * k0 * r)
-    / (4.0 * np.pi * r)
-    * (L_spherical[1, :] + Z0 * N_spherical[2, :])
-)
+    Ez_at_f = fourier_transform_amplitude(Ez_square, target_frequency, t_E)
+    Hx_at_f = fourier_transform_amplitude(Hx_square, target_frequency, t_H)
+    Hy_at_f = fourier_transform_amplitude(Hy_square, target_frequency, t_H)
+
+    E_to_cross = np.zeros((3, len(Ez_square)), dtype=np.complex128)
+    H_to_cross = np.zeros((3, len(Hx_square)), dtype=np.complex128)
+
+    E_to_cross[2] = Ez_at_f
+    H_to_cross[0] = Hx_at_f
+    H_to_cross[1] = Hy_at_f
+
+    M_eff = -np.cross(ns_Ez, E_to_cross, axisa=0, axisb=0)
+    J_eff = np.cross(ns_Hx, H_to_cross, axisa=0, axisb=0)
+
+    phi = np.linspace(0, 2.0 * np.pi, 1000)
+    theta = np.pi / 2
+
+    Nz = np.zeros_like(phi, dtype=np.complex128)
+    Lx = np.zeros_like(phi, dtype=np.complex128)
+    Ly = np.zeros_like(phi, dtype=np.complex128)
+
+    k0 = 2.0 * np.pi * target_frequency * np.sqrt(epsilon_0 * mu_0)
+    Z0 = np.sqrt(mu_0 / epsilon_0)
+    for i, theta_i in enumerate(phi):
+        Nz[i] = np.sum(
+            dx
+            * J_eff[:, 2]
+            * np.exp(
+                1j
+                * k0
+                * (np.cos(theta_i) * x_square_1d + np.sin(theta_i) * y_square_1d)
+            )
+        )
+        Lx[i] = np.sum(
+            dx
+            * M_eff[:, 0]
+            * np.exp(
+                1j
+                * k0
+                * (np.cos(theta_i) * x_square_1d + np.sin(theta_i) * y_square_1d)
+            )
+        )
+        Ly[i] = np.sum(
+            dx
+            * M_eff[:, 1]
+            * np.exp(
+                1j
+                * k0
+                * (np.cos(theta_i) * x_square_1d + np.sin(theta_i) * y_square_1d)
+            )
+        )
+
+    N = np.zeros((3, len(Nz)), dtype=Nz.dtype)
+    N[2, :] = Nz
+
+    L = np.zeros((3, len(Lx)), dtype=Lx.dtype)
+    L[0, :] = Lx
+    L[1, :] = Ly
+
+    N_spherical = cartesian_vector_to_spherical(N, theta * np.ones_like(phi), phi)
+    L_spherical = cartesian_vector_to_spherical(L, theta * np.ones_like(phi), phi)
+
+    r = 1000.0
+    # E_theta = (
+    #     -1j
+    #     * k0
+    #     * np.exp(-1j * k0 * r)
+    #     / (4.0 * np.pi * r)
+    #     * (L_spherical[2, :] + Z0 * N_spherical[1, :])
+    # )
+    # E_phi = (
+    #     1j
+    #     * k0
+    #     * np.exp(-1j * k0 * r)
+    #     / (4.0 * np.pi * r)
+    #     * (L_spherical[1, :] + Z0 * N_spherical[2, :])
+    # )
+
+    t0 = 4.0 * t_sig
+    E_inc = mgpulse_ft(
+        target_frequency, t_sig, target_frequency, t0
+    )  # f_src = the pulse's center frequency
+    sigma_2d = (
+        (k0 / 4)
+        * np.abs(L_spherical[2] + Z0 * N_spherical[1]) ** 2
+        / np.abs(E_inc) ** 2
+    )
+    return phi, sigma_2d
 
 
-def mgpulse_ft(f, t_sig, frequency, t0=0.0):
-    G = lambda ff: t_sig * np.sqrt(2 * np.pi) * np.exp(-2.0 * (np.pi * t_sig * ff) ** 2)
-    return np.exp(-2j * np.pi * f * t0) * (G(f - frequency) - G(f + frequency)) / 2j
+def mono_echo_width(data_path):
+    data = np.load(data_path)
+    t_E = data["t"]
+    dt = t_E[1] - t_E[0]
+    t_H = data["t"] - dt / 2
+    x_Ez = data["x_Ez"]
+    y_Ez = data["y_Ez"]
+    x_Hx = data["x_Hx"]
+    y_Hx = data["y_Hx"]
+    x_Hy = data["x_Hy"]
+    y_Hy = data["y_Hy"]
+    Ez = data["Ez"]
+    Hx = data["Hx"]
+    Hy = data["Hy"]
+
+    defaults_path = Path("solver_default.json")
+    defaults = json.loads(defaults_path.read_text())
+    # This is OK because my grid is always exactly square
+    x_line_Ez = x_Ez[0, :]
+    integration_surface_uniform = defaults["PML_inset_as_uniform"] + 0.05
+    x_left = (x_Ez.max() - x_Ez.min()) * integration_surface_uniform
+    x_right = (x_Ez.max() - x_Ez.min()) * (1 - integration_surface_uniform)
+    x_left_i = np.abs(x_line_Ez - x_left).argmin()
+    x_right_i = np.abs(x_line_Ez - x_right).argmin()
+
+    x_square_1d, y_square_1d, Ez_square, angle_Ez, ns_Ez = get_square(
+        x_Ez, y_Ez, Ez, x_left_i, x_right_i, x_left_i, x_right_i
+    )
+
+    (
+        x_square_1d_Hx_above,
+        y_square_1d_Hx_above,
+        Hx_square_above,
+        angle_Hx_above,
+        ns_Hx_above,
+    ) = get_square(x_Hx, y_Hx, Hx, x_left_i, x_right_i, x_left_i, x_right_i)
+    (
+        x_square_1d_Hx_below,
+        y_square_1d_Hx_below,
+        Hx_square_below,
+        angle_Hx_below,
+        ns_Hx_below,
+    ) = get_square(x_Hx, y_Hx, Hx, x_left_i - 1, x_right_i - 1, x_left_i, x_right_i)
+
+    x_square_1d_Hx = (x_square_1d_Hx_above + x_square_1d_Hx_below) / 2
+    y_square_1d_Hx = (y_square_1d_Hx_above + y_square_1d_Hx_below) / 2
+    Hx_square = (Hx_square_above + Hx_square_below) / 2
+    angle_Hx = (angle_Hx_above + angle_Hx_below) / 2
+    ns_Hx = (ns_Hx_above + ns_Hx_below) / 2
+
+    (
+        x_square_1d_Hy_above,
+        y_square_1d_Hy_above,
+        Hy_square_above,
+        angle_Hy_above,
+        ns_Hy_above,
+    ) = get_square(x_Hy, y_Hy, Hy, x_left_i, x_right_i, x_left_i, x_right_i)
+    (
+        x_square_1d_Hy_below,
+        y_square_1d_Hy_below,
+        Hy_square_below,
+        angle_Hy_below,
+        ns_Hy_below,
+    ) = get_square(x_Hy, y_Hy, Hy, x_left_i, x_right_i, x_left_i - 1, x_right_i - 1)
+
+    x_square_1d_Hy = (x_square_1d_Hy_above + x_square_1d_Hy_below) / 2
+    y_square_1d_Hy = (y_square_1d_Hy_above + y_square_1d_Hy_below) / 2
+    Hy_square = (Hy_square_above + Hy_square_below) / 2
+    angle_Hy = (angle_Hy_above + angle_Hy_below) / 2
+    ns_Hy = (ns_Hy_above + ns_Hy_below) / 2
+
+    # fft amplitudes at target_frequency
+    dx = x_Ez[0, 1] - x_Ez[0, 0]
+    dy = y_Ez[1, 0] - y_Ez[0, 0]
+    center_frequency = 10e9
+    target_frequency = np.linspace(9e9, 11e9, 10)
+    sigma_monostatic = np.zeros_like(target_frequency, dtype=np.complex128)
+
+    for i in range(len(target_frequency)):
+        Ez_at_f = fourier_transform_amplitude(Ez_square, target_frequency[i], t_E)
+        Hx_at_f = fourier_transform_amplitude(Hx_square, target_frequency[i], t_H)
+        Hy_at_f = fourier_transform_amplitude(Hy_square, target_frequency[i], t_H)
+
+        E_to_cross = np.zeros((3, len(Ez_square)), dtype=np.complex128)
+        H_to_cross = np.zeros((3, len(Hx_square)), dtype=np.complex128)
+
+        E_to_cross[2] = Ez_at_f
+        H_to_cross[0] = Hx_at_f
+        H_to_cross[1] = Hy_at_f
+
+        M_eff = -np.cross(ns_Ez, E_to_cross, axisa=0, axisb=0)
+        J_eff = np.cross(ns_Hx, H_to_cross, axisa=0, axisb=0)
+
+        phi = np.pi
+        theta = np.pi / 2
+
+        Nz = np.zeros_like(phi, dtype=np.complex128)
+        Lx = np.zeros_like(phi, dtype=np.complex128)
+        Ly = np.zeros_like(phi, dtype=np.complex128)
+
+        k0 = 2.0 * np.pi * target_frequency[i] * np.sqrt(epsilon_0 * mu_0)
+        Z0 = np.sqrt(mu_0 / epsilon_0)
+        Nz = np.sum(
+            dx
+            * J_eff[:, 2]
+            * np.exp(1j * k0 * (np.cos(phi) * x_square_1d + np.sin(phi) * y_square_1d))
+        )
+        Lx = np.sum(
+            dx
+            * M_eff[:, 0]
+            * np.exp(1j * k0 * (np.cos(phi) * x_square_1d + np.sin(phi) * y_square_1d))
+        )
+        Ly = np.sum(
+            dx
+            * M_eff[:, 1]
+            * np.exp(1j * k0 * (np.cos(phi) * x_square_1d + np.sin(phi) * y_square_1d))
+        )
+
+        N = np.zeros(3, dtype=Nz.dtype)
+        N[2, ...] = Nz
+
+        L = np.zeros(3, dtype=Lx.dtype)
+        L[0, ...] = Lx
+        L[1, ...] = Ly
+
+        N_spherical = cartesian_vector_to_spherical(N, theta * np.ones_like(phi), phi)
+        L_spherical = cartesian_vector_to_spherical(L, theta * np.ones_like(phi), phi)
+
+        t_sig = 3.0 / center_frequency
+        t0 = 4.0 * t_sig
+        E_inc = mgpulse_ft(center_frequency, t_sig, target_frequency[i], t0)
+        sigma_monostatic[i] = (
+            (k0 / 4)
+            * np.abs(L_spherical[2] + Z0 * N_spherical[1]) ** 2
+            / np.abs(E_inc) ** 2
+        )
+    return target_frequency, sigma_monostatic
 
 
-# fig, ax = plt.subplots(1, 2)
-# ax[0].plot(phi, np.real(E_theta), linewidth=2)
-# ax[0].plot(phi, np.imag(E_theta), linewidth=2)
-# ax[1].plot(phi, np.real(E_phi), linewidth=2)
-# ax[1].plot(phi, np.imag(E_phi), linewidth=2)
+# compare_data = np.load("tmz_pec_compare.npz")
+# phi_compare = compare_data["phi"]
+# result_compare = compare_data["result"]
 
-
-t_sig = 3.0 / target_frequency
-t0 = 4.0 * t_sig
-E_inc = mgpulse_ft(
-    target_frequency, t_sig, target_frequency, t0
-)  # f_src = the pulse's center frequency
-sigma_2d = (
-    (k0 / 4) * np.abs(L_spherical[2] + Z0 * N_spherical[1]) ** 2 / np.abs(E_inc) ** 2
-)
-
-compare_data = np.load("tmz_pec_compare.npz")
-phi_compare = compare_data["phi"]
-result_compare = compare_data["result"]
-
-fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, layout="constrained", figsize=(8,8))
-ax.set_rticks([-25, -15])
-ax.set_rlabel_position(90)
-ax.set_xlabel(r"$\phi$")
-ax.plot(
-    phi_compare,
-    20.0 * np.log10(result_compare),
-    linewidth=2,
-    color="black",
-    alpha=0.5,
-    label=r"$dB(\sigma_{\text{2D}}^{\text{\Sigma}})$",
-)
-ax.plot(
-    phi,
-    20.0 * np.log10(sigma_2d),
-    linewidth=2,
-    color="red",
-    alpha=0.5,
-    label=r"$dB(\sigma_{\text{2D}}^{FDTD})$",
-)
-ax.legend()
-fig.savefig("plots/bist_pec_tmz.png", dpi=200)
-
-
+fs, sig_monostatic = mono_echo_width("data/bist_tmz_pec_fields_40_40_2p6k.npz")
+compare_data = np.load("tmz_pec_monostatic.npz")
+fs2 = compare_data["frequency"]
+sig_monostatic2 = compare_data["sigma_monostatic"]
+fig, ax = plt.subplots()
+ax.scatter(fs, np.abs(sig_monostatic))
+ax.plot(fs2, sig_monostatic2)
 plt.show()

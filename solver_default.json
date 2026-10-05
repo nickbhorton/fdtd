@@ -8,7 +8,7 @@
     "wavelengths_in_y": 6,
     "wavelength_discretization_x": 25,
     "wavelength_discretization_y": 25,
-    "PML_inset_as_uniform": 0.1666666666666666,
+    "PML_inset_as_uniform": 0.16666666666,
     "left_boundary": "PML",
     "right_boundary": "PML",
     "top_boundary": "PML",
